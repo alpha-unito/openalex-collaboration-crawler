@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use openalex_collaboration_crawler::graph_utils::{
     get_num_threads, merge_files, process_directories, process_single_author_file, read_lines,
 };
-use serde_json::Value;
+use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -47,19 +47,16 @@ fn main() {
     Sequence of execution: extractor + compressor -> filter
     */
 
-    let output_file_name_compress: String = match &args.output_file_name {
-        Some(file_name) => {
-            if args.country_code_filter.is_none() {
-                file_name.clone()
-            } else {
-                "authors_compressed.jsonl".to_string()
-            }
-        }
-        None => "authors_compressed.jsonl".to_string(),
+    let output_file_name_compress = if args.country_code_filter.is_none() {
+        args.output_file_name
+            .clone()
+            .unwrap_or_else(|| "authors_compressed.jsonl".to_string())
+    } else {
+        "authors_compressed.jsonl".to_string()
     };
 
     let input_dir = args.openalex_input_dir;
-    let mut num_cores_avail = get_num_threads();
+
     println!("[i] {}", "Starting extractor phase".blue());
     println!(
         "[i] {}{}",
@@ -68,12 +65,9 @@ fn main() {
     );
 
     let paths = process_directories(input_dir);
-    if (paths.len() as u64) < num_cores_avail {
-        num_cores_avail = paths.len() as u64;
-    }
+    let num_cores_avail = std::cmp::min(paths.len() as u64, get_num_threads());
 
     let progress = ProgressBar::new(paths.len() as u64);
-
     progress.set_style(
         ProgressStyle::with_template("[i] Extracted files: [{wide_bar:.cyan/blue}] {percent}%")
             .unwrap()
@@ -122,20 +116,17 @@ fn main() {
     println!("[i] {}", "Completed extractor phase".green());
     println!("[i] {}", "Merging extracted data".yellow());
 
-    let mut files_to_merge: Vec<String> = Vec::new();
-    for i in 0..num_cores_avail {
-        files_to_merge.push("/tmp/extractor.part.".to_string() + i.to_string().as_str());
-    }
+    let files_to_merge: Vec<String> = (0..num_cores_avail)
+        .map(|i| format!("/tmp/extractor.part.{i}"))
+        .collect();
 
-    let temporary_author_filename: String = "/tmp/authors.jsonl".to_string();
+    merge_files(&files_to_merge, "/tmp/authors.jsonl").expect("Unable to merge files");
 
-    merge_files(&files_to_merge, &temporary_author_filename).expect("Unable to merge files");
-
-    let mut dataset: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
+    let mut affiliation_dataset: HashMap<String, HashMap<String, Vec<String>>> = HashMap::new();
 
     {
         let bar = ProgressBar::new(
-            File::open(&temporary_author_filename)
+            File::open("/tmp/authors.jsonl")
                 .unwrap()
                 .metadata()
                 .unwrap()
@@ -150,14 +141,16 @@ fn main() {
             .progress_chars("#>-"),
         );
 
-        for line in read_lines(&temporary_author_filename).unwrap() {
+        for line in read_lines("/tmp/authors.jsonl").unwrap() {
             let line_unwrapped = line.unwrap();
             bar.inc((line_unwrapped.chars().count() + 1) as u64);
             let object: Value = serde_json::from_str(line_unwrapped.as_str()).unwrap();
             let id = object["id"].to_string();
 
             // Add entry to map if not found
-            let aff_map = dataset.entry(id.clone()).or_insert(HashMap::new());
+            let aff_map = affiliation_dataset
+                .entry(id.clone())
+                .or_insert(HashMap::new());
 
             for entry in object["affs"].as_array().unwrap() {
                 for (key, value) in entry.as_object().unwrap() {
@@ -172,7 +165,7 @@ fn main() {
 
     {
         println!("[i] {}", "Starting compress phase".blue());
-        let bar = ProgressBar::new(dataset.len() as u64);
+        let bar = ProgressBar::new(affiliation_dataset.len() as u64);
 
         bar.set_style(
             ProgressStyle::with_template("[i] Saving data [{wide_bar:.cyan/blue}] {percent}%")
@@ -181,26 +174,24 @@ fn main() {
         );
         let mut output_file =
             File::create(&output_file_name_compress).expect("Unable to create file");
-        for (key, value) in &dataset {
+
+        for (openalex_id, country_affiliations) in &affiliation_dataset {
             bar.inc(1);
 
-            write!(output_file, "{{ \"id\": {}, \"affs\": {{", key).unwrap();
-            for (year_index, (year, affs)) in value.iter().enumerate() {
-                write!(output_file, "\"{}\": [", year).unwrap();
-                for (affiliation_index, aff) in affs.iter().enumerate() {
-                    write!(output_file, "{} ", aff).unwrap();
-                    if affiliation_index != affs.len() - 1 {
-                        write!(output_file, ",").unwrap();
-                    }
-                }
-                write!(output_file, "]").unwrap();
-                if year_index != value.len() - 1 {
-                    write!(output_file, ",").unwrap();
-                }
-            }
+            // "year" : [ "country1" , "country2" , ... ]
+            let affs_json: Map<String, Value> = country_affiliations
+                .iter()
+                .map(|(year, country_code)| (year.clone(), json!(country_code)))
+                .collect();
 
-            writeln!(output_file, "}} }}").unwrap();
+            let record = json!({
+                "id": openalex_id,
+                "affs": affs_json
+            });
+
+            writeln!(output_file, "{}", record.to_string()).unwrap();
         }
+
         println!("[i] {}", "Completed compress stage".green());
     }
 
@@ -210,8 +201,7 @@ fn main() {
             .unwrap_or_else(|| "authors_filtered.jsonl".to_string());
 
         let mut output_file = File::create(output_file_name_filter).unwrap();
-        let formatted_country: String =
-            "\"".to_string() + args.country_code_filter.unwrap().as_str() + "\"";
+        let formatted_country = format!("\"{}\"", args.country_code_filter.unwrap());
 
         let bar = ProgressBar::new(
             File::open(&output_file_name_compress)
