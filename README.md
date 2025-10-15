@@ -1,54 +1,99 @@
 # OpenAlex Collaboration Crawler
 
-This repo contains the code to extract and generate a collaboration temporal network. It is composed of several steps, 
-divided into different tools. The structure of the workflow is the following:
+[![Rust](https://img.shields.io/badge/Made%20with-Rust-orange?logo=rust)](https://www.rust-lang.org/)
 
-<img src="extra/OpenAlexGraphGen-wf.png">
+This repository contains the code to **extract and generate temporal collaboration networks** using data from the [OpenAlex](https://openalex.org) snapshot.
 
+The workflow is composed of several modular tools, each responsible for a specific step in the data extraction and transformation process.
 
-# Step 1: Author
-This steps aims at extracting authors and generate a JSONL list of authors affiliaiton. This macro step does not 
-stores all the information of a given author, but rather creates an output file of an author id, and an array with 
-the known country to which he/she was affilaited in a given year. This macro step is composed of three different sub 
-steps, all compiled into a single executable (meaning that they can be deployed individually or alltoghether)
+<img src="extra/OpenAlexGraphGen-wf.png" alt="Workflow diagram">
 
-### Step 1.1: Author extractor
-This step extracts the author informations from the OpenAlex snapshot.
+An example of the produced dataset can be found at:
 
-### Step 1.2: Author compressor
-Since OpenAlex uses incremental updates in its snapshots, this step compresses author informations to single entries
-into the JSONL source file, merging the affiliations.
-
-### Step 1.3: Author filter
-This step filter the obtained author by a given country. This means that the output file contains authors that at a 
-given point have been affiliated to the provided country.
-
-# Step 2: Paper
-This step aims at extracting papers accordingly to the authors obtained from step 1. Contrary to step 1, the results 
-of this step is a JSONL containing all the information of a given paper. This step is comprised of 2 steps:
-
-### Step 2.1: Paper extractor
-This steps extracts the papers from the OpenAlex snapshot folder. It produces a file containing papers that have been
-authored by any of the authors present in the produced file by step 1. Contrary to step 1, the JSONL entry for a given 
-paper contains all the information of the paper provided by OpenAlex
-
-### Step 2.2: Paper filter
-This step filters the extracted papers accordingly to a given research topic and the author file. 
-During this steps, a paper to be kept in the output file, needs to match two checks:
-- the OpenAlex ``concepts`` field must have one entry that matches the given filter
-- At leas one author of the paper, must be affiliated to the country specified in the filter parameter in the 
-    year the paper has been published. 
+[![Italian collaboration](https://img.shields.io/badge/Italian%20ComSci.%20Collaborations-10.5281%2Fzenodo.17257787-blue)](https://doi.org/10.5281/zenodo.17257787)
 
 
-# Step 3: Graph
-This is the final step, that aims to create an adjacency list of collaborations. The created adjacency list(s), is a CSV
-file in which each line has four fields:
-- year of the pubblication
-- OpenAlex ID of the pulication
-- OpenAlex author ID 1
-- OpenAlex author ID 2
+---
 
-It is possible to split the adjacency list into different time frames. the format to give the filter is defined in the 
-following: a list of year (extremes included) separated by a comma. each element is given by <starting_year>-<end_year>
-If either starting_year or <ending_year> are missing, it is intended that everything before or after the given year
-should go into the same timeframe. 
+## 🧩 Overview of the Workflow
+
+The process is divided into **three main steps**:
+
+1. **Author Extraction and Filtering**
+2. **Paper Extraction and Filtering**
+3. **Graph Construction**
+
+Each step produces intermediate artifacts (typically in JSONL or CSV format) that serve as inputs for the following stages.
+
+---
+
+## Step 1: Author
+
+This step focuses on **extracting and processing author data** from OpenAlex snapshots to build a JSONL list of authors and their yearly affiliations.
+
+Unlike the full OpenAlex author dataset, this step produces a compact representation containing:
+- The **author ID**
+- An array of **known countries of affiliation by year**
+
+All author-related operations are grouped into a single executable, which can run the substeps **individually or together**.
+
+### Step 1.1: Author Extractor
+Extracts basic author information from the OpenAlex snapshot files.
+
+### Step 1.2: Author Compressor
+Since OpenAlex snapshots use incremental updates, this step **merges author entries** into a single consolidated JSONL record per author, combining all available affiliations.
+
+### Step 1.3: Author Filter
+Filters authors by **country affiliation**.  
+The output file includes only authors who have been affiliated with the specified country **at any point in time**.
+
+---
+
+## Step 2: Paper
+
+This step extracts and filters papers authored by the selected authors from Step 1.  
+Unlike Step 1, the resulting JSONL file includes **complete metadata** for each paper as provided by OpenAlex.
+
+### Step 2.1: Paper Extractor
+Extracts papers from the OpenAlex snapshot that were **authored by any author** listed in the Step 1 output.  
+Each JSONL entry contains the **full OpenAlex paper record**.
+
+### Step 2.2: Paper Filter
+Filters papers based on a **research topic** and the **country affiliation** of the authors.
+
+A paper is kept in the output if it meets **both** of the following conditions:
+1. The `concepts` field includes at least one entry matching the given topic filter.
+2. At least one author of the paper was affiliated with the specified country **in the year of publication**.
+
+---
+
+## Step 3: Graph
+
+The final step constructs the **collaboration network** as an adjacency list.
+
+The resulting CSV file contains one row per collaboration and includes four fields:
+
+| Year | Publication ID | Author ID 1 | Author ID 2 |
+|------|-----------------|--------------|--------------|
+
+Each row represents a **pairwise collaboration** between two authors on a paper published in the given year.
+
+### Timeframe Splitting
+It is possible to generate separate adjacency lists for different time ranges.  
+The timeframe filter should be provided as a comma-separated list of ranges in the format:
+```csv
+<start_year>-<end_year>,<start_year>-<end_year>,...
+```
+
+- If `<start_year>` is omitted, it includes **all years before** `<end_year>`.
+- If `<end_year>` is omitted, it includes **all years after** `<start_year>`.
+
+---
+
+## 🧠 Summary
+
+| Step | Purpose | Output |
+|------|----------|---------|
+| 1 | Extract, compress, and filter authors by country | JSONL of authors with yearly affiliations |
+| 2 | Extract and filter papers by topic and author country | JSONL of papers |
+| 3 | Build collaboration graph | CSV adjacency list |
