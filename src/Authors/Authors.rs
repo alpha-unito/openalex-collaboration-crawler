@@ -1,16 +1,20 @@
 use clap::{arg, Parser};
 use colored::Colorize;
+use flate2::read::GzDecoder;
 use indicatif::{ProgressBar, ProgressStyle};
+use serde_json::{json, Map, Value};
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, Read, Write};
+use std::process::exit;
+use std::sync::{Arc, Mutex};
+use std::{env, fs, io, path, thread};
+use walkdir::WalkDir;
+
 use openalex_collaboration_crawler::graph_utils::{
     get_num_threads, merge_files, process_directories, process_single_author_file, read_lines,
 };
-use serde_json::{json, Map, Value};
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
-use std::process::exit;
-use std::sync::{Arc, Mutex};
-use std::thread;
 
 #[derive(Parser, Debug)]
 #[command(about, long_about = None)]
