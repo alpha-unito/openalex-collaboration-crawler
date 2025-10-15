@@ -1,6 +1,6 @@
 use clap::Parser;
 use colored::Colorize;
-use openalex_graph_gen::graph_utils::{extract_topics, get_num_threads, merge_files, read_lines};
+use openalex_collaboration_crawler::graph_utils::{extract_topics, get_num_threads, merge_files, read_lines};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::Value;
 use std::collections::HashMap;

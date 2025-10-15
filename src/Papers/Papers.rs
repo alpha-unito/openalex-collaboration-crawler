@@ -1,7 +1,7 @@
 use clap::{arg, Parser};
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
-use openalex_graph_gen::graph_utils::{
+use openalex_collaboration_crawler::graph_utils::{
     extract_topics, get_num_threads, load_authors_from_file, merge_files, process_directories,
     process_single_work_file,
 };
