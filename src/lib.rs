@@ -64,7 +64,7 @@ pub mod graph_utils {
         let bar = ProgressBar::new(source_files.len() as u64);
         bar.set_style(
             ProgressStyle::with_template(
-                "[i] Compressed files: {bar:40.cyan/blue} {pos:>7}/{len:7} [{elapsed_precise}]",
+                "[i] Merging files: {bar:40.cyan/blue} {pos:>7}/{len:7} [{elapsed_precise}]",
             )
             .unwrap()
             .progress_chars("##-"),
