@@ -213,7 +213,6 @@ std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::strin
 
     // Extract publication_year
     uint64_t pub_year = doc["publication_year"].get_uint64();
-    std::cout << "Publication year: " << pub_year << "\n";
 
     // Extract list of author IDs
     std::vector<std::string> author_ids;
