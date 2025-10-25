@@ -102,7 +102,7 @@ int main(int argc, const char **argv) {
 
     info_colored("Starting extractor phase");
 
-    const auto paths = find_gz_files(input_dir + "data/works/");
+    const auto paths = find_gz_files(input_dir);
 
     const unsigned num_threads =
         std::min<unsigned>(get_num_threads(), static_cast<unsigned>(paths.size()));
