@@ -3,9 +3,9 @@
 #include <simdjson.h>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
-#include <unordered_map>
 
 #include "decompress.h"
 #include "openalex_json.h"
@@ -208,7 +208,8 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
 
 std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string raw_json) {
     simdjson::ondemand::parser parser;
-    auto doc = parser.iterate(raw_json);
+    simdjson::padded_string json_line(raw_json);
+    auto doc = parser.iterate(json_line);
 
     // Extract publication_year
     uint64_t pub_year = doc["publication_year"].get_uint64();
