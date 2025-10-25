@@ -131,7 +131,8 @@ int main(int argc, const char **argv) {
                     break;
                 }
 
-                // TODO: Process single paper file
+                process_single_paper_file(paths.at(i), out, country_code_filter, topic_filter,
+                                          author_affiliations);
 
                 {
                     std::scoped_lock lk(bar_mtx);

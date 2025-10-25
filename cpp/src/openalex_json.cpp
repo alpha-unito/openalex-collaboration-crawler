@@ -203,3 +203,21 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
 
     return authors;
 }
+
+std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string raw_json) {
+    simdjson::ondemand::parser parser;
+    auto doc = parser.iterate(raw_json);
+
+    // Extract publication_year
+    uint64_t pub_year = doc["publication_year"].get_uint64();
+    std::cout << "Publication year: " << pub_year << "\n";
+
+    // Extract list of author IDs
+    std::vector<std::string> author_ids;
+    for (auto author_entry : doc["authorships"]) {
+        std::string_view id = author_entry["author"]["id"].get_string();
+        author_ids.emplace_back(id);
+    }
+
+    return {pub_year, author_ids};
+}
