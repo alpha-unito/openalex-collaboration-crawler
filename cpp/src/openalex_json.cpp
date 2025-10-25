@@ -141,7 +141,7 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
     std::error_code ec;
     auto sz = std::filesystem::file_size(author_file, ec);
 
-    info_colored("Started author loading phase");
+    info_colored("Started loading author file: " + author_file.string());
 
     auto load_bar = get_progress_bar("Loading authors in memory", sz);
 
