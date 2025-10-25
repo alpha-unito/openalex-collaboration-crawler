@@ -26,7 +26,7 @@ unsigned get_num_threads() {
 void merge_files(const std::vector<std::string> &source_files, const std::string &output_file) {
     using namespace indicators;
 
-    auto bar = get_progress_bar("Merging files", source_files.size());
+    auto bar = get_progress_bar("Merging partials", source_files.size());
 
     std::ofstream out(output_file, std::ios::binary | std::ios::app);
     if (!out) {

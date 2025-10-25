@@ -3,6 +3,7 @@
 #include <simdjson.h>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -129,4 +130,102 @@ void load_and_compress_authors(AffMap &affiliation_dataset, std::string &country
     }
 
     load_bar.mark_as_completed();
+}
+
+/**
+ *
+ * @param author_file
+ * @return unordered map in this form: author:string -> [ year:int ] -> [ affiliation:string ]
+ */
+std::unordered_map<std::string, std::vector<std::vector<std::string>>>
+load_authors_affiliations(const std::filesystem::path &author_file) {
+    std::error_code ec;
+    size_t progress = 0;
+    auto sz         = std::filesystem::file_size(author_file, ec);
+    auto load_bar   = get_progress_bar("Loading authors in memory", sz);
+
+    std::unordered_map<std::string, std::vector<std::vector<std::string>>> authors;
+    simdjson::ondemand::parser parser;
+    std::ifstream infile(author_file);
+    if (!infile.is_open()) {
+        throw std::runtime_error("Unable to open " + author_file.string());
+    }
+
+    std::string line;
+    while (std::getline(infile, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        // Parse each line as an individual JSON object
+        std::string_view _line(line);
+        simdjson::padded_string json_line(_line);
+        auto doc = parser.iterate(json_line);
+
+        // Extract "id"
+        std::string_view id;
+        if (doc["id"].get(id) != simdjson::SUCCESS) {
+            continue;
+        }
+
+        auto affs_field = doc["affs"];
+        if (affs_field.error() != simdjson::SUCCESS) {
+            continue;
+        }
+
+        std::vector<std::vector<std::string>> year_affs;
+        for (auto field : affs_field.get_object()) {
+            std::string_view year = field.unescaped_key();
+            auto aff_array        = field.value().get_array();
+
+            std::vector<std::string> affs;
+            for (auto aff : aff_array) {
+                std::string_view aff_str;
+                if (aff.get(aff_str) == simdjson::SUCCESS) {
+                    affs.emplace_back(aff_str);
+                }
+            }
+
+            // Insert [year, affs...] entry — first element is the year string
+            std::vector<std::string> entry;
+            entry.emplace_back(year);
+            entry.insert(entry.end(), affs.begin(), affs.end());
+            year_affs.push_back(std::move(entry));
+        }
+
+        authors[std::string(id)] = std::move(year_affs);
+
+        progress += line.size();
+        load_bar.set_progress(progress);
+    }
+
+    load_bar.mark_as_completed();
+
+    info_colored("Loaded " + std::to_string(authors.size()) + " authors");
+
+    return authors;
+}
+
+std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string raw_json) {
+    try {
+        simdjson::ondemand::parser parser;
+        simdjson::padded_string json_line(raw_json);
+        auto doc = parser.iterate(json_line);
+
+        // Extract publication_year
+        uint64_t pub_year = doc["publication_year"].get_uint64();
+
+        // Extract list of author IDs
+        std::vector<std::string> author_ids;
+        for (auto author_entry : doc["authorships"]) {
+            std::string_view id = author_entry["author"]["id"].get_string();
+            author_ids.emplace_back(id);
+        }
+
+        return {pub_year, author_ids};
+    } catch (...) {
+        std::cout << "Unable to parse JSON line: " << raw_json << std::endl;
+    }
+
+    return {};
 }

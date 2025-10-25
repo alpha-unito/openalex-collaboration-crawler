@@ -15,7 +15,6 @@
 #include <string>
 #include <vector>
 
-// Reads a .gz file fully into memory and decompresses it
 std::vector<char> read_gz_to_memory(const std::string &gz_path) {
     if (!std::filesystem::exists(gz_path)) {
         throw std::runtime_error("File not found: " + gz_path);
@@ -86,4 +85,49 @@ std::vector<std::string> find_gz_files(const std::string &root) {
         }
     }
     return paths;
+}
+
+std::string to_lower(std::string s) {
+    std::ranges::transform(s, s.begin(), [](unsigned char c) { return std::tolower(c); });
+    return s;
+}
+
+void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstream &out,
+                               const std::string &affiliation_country, const std::string &topic) {
+
+    try {
+        std::ifstream file(gz_path, std::ios::binary);
+        if (!file) {
+            error_colored("Cannot open " + gz_path.string());
+            return;
+        }
+
+        boost::iostreams::filtering_istream in;
+        in.push(boost::iostreams::gzip_decompressor());
+        in.push(file);
+
+        const std::string formatted_country_aff = "\"" + affiliation_country + "\"";
+        std::string line;
+
+        while (std::getline(in, line)) {
+            if (line.empty()) {
+                continue;
+            }
+
+            if (line.find(formatted_country_aff) == std::string::npos) {
+                continue;
+            }
+
+            if (line.find(topic) == std::string::npos) {
+                continue;
+            }
+
+            out << line << '\n';
+        }
+
+        out.flush();
+
+    } catch (const std::exception &e) {
+        error_colored("Failed to decompress " + gz_path.string() + ": " + std::string(e.what()));
+    }
 }
