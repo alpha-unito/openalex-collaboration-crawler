@@ -19,8 +19,8 @@
 #include "utils.h"
 #include <args.hxx>
 
-static std::tuple<std::string, std::string, std::string, std::string, std::string>
-parse_cli(int argc, const char **argv) {
+static std::tuple<std::string, std::string, std::string, std::string> parse_cli(int argc,
+                                                                                const char **argv) {
     args::ArgumentParser parser("OpenAlex Collaboration Crawler / authors step");
     args::HelpFlag help(parser, "help", "Show help", {'h', "help"});
 
@@ -28,12 +28,6 @@ parse_cli(int argc, const char **argv) {
                                            {'i', "input-dir"});
     args::ValueFlag<std::string> output(parser, "FILE", "Output file name",
                                         {'o', "output-file-name"});
-
-    args::ValueFlag<std::string> author_filter_file(
-        parser, "PATH",
-        "File produced with the author step. The papers resulted from this step will be authored "
-        "from authors contained within this list",
-        {'a', "author-file"});
 
     args::ValueFlag<std::string> coutry_filter(parser, "COUNTRY_CODE", "Country of affiliation ",
                                                {'c', "country-code-filter"});
@@ -59,17 +53,14 @@ parse_cli(int argc, const char **argv) {
     auto country_code_filter = coutry_filter ? args::get(coutry_filter) : "";
     auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
-    auto author_file         = author_filter_file ? args::get(author_filter_file) : "";
     auto topic_filter        = topic ? args::get(topic) : "";
 
     return {country_code_filter, std::filesystem::canonical(input_dir_string),
-            std::filesystem::weakly_canonical(output_file_name),
-            std::filesystem::canonical(author_file), topic_filter};
+            std::filesystem::weakly_canonical(output_file_name), topic_filter};
 }
 
 int main(int argc, const char **argv) {
-    auto [country_code_filter, input_dir, output_filename, author_input_file, topic_filter] =
-        parse_cli(argc, argv);
+    auto [country_code_filter, input_dir, output_filename, topic_filter] = parse_cli(argc, argv);
 
     if (input_dir.empty()) {
         error_colored("No input dir for AWS snapshot provided.");
@@ -81,11 +72,6 @@ int main(int argc, const char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    if (author_input_file.empty()) {
-        error_colored("No author filter file provided.");
-        exit(EXIT_FAILURE);
-    }
-
     if (topic_filter.empty()) {
         error_colored("No topic filter provided.");
         exit(EXIT_FAILURE);
@@ -94,12 +80,8 @@ int main(int argc, const char **argv) {
     info_colored("Openalex AWS snapshot directory: " + input_dir);
     info_colored("Output file: " + output_filename);
     info_colored("Apply filter for country code: " + country_code_filter);
-    info_colored("Author filter file: " + author_input_file);
     info_colored("Topic filter: " + topic_filter);
     warn_colored("=============================");
-
-    std::unordered_map<std::string, std::vector<std::vector<std::string>>> author_affiliations;
-    // = load_authors_affiliations(author_input_file);
 
     info_colored("Starting extractor phase");
 
@@ -132,8 +114,7 @@ int main(int argc, const char **argv) {
                     break;
                 }
 
-                process_single_paper_file(paths.at(i), out, country_code_filter, topic_filter,
-                                          author_affiliations);
+                process_single_paper_file(paths.at(i), out, country_code_filter, topic_filter);
 
                 {
                     std::scoped_lock lk(bar_mtx);

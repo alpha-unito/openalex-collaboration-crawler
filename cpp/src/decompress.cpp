@@ -92,11 +92,8 @@ std::string to_lower(std::string s) {
     return s;
 }
 
-void process_single_paper_file(
-    const std::filesystem::path &gz_path, std::ofstream &out,
-    const std::string &affiliation_country, const std::string &topic,
-    const std::unordered_map<std::string, std::vector<std::vector<std::string>>>
-        &author_affiliations) {
+void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstream &out,
+                               const std::string &affiliation_country, const std::string &topic) {
 
     try {
         std::ifstream file(gz_path, std::ios::binary);
@@ -109,7 +106,8 @@ void process_single_paper_file(
         in.push(boost::iostreams::gzip_decompressor());
         in.push(file);
 
-        const std::string formatted_topic = to_lower(topic);
+        const std::string formatted_country_aff = "\"" + affiliation_country + "\"";
+        const std::string formatted_topic       = to_lower(topic);
         std::string line;
 
         while (std::getline(in, line)) {
@@ -117,58 +115,23 @@ void process_single_paper_file(
                 continue;
             }
 
+            if (line.find(formatted_country_aff) == std::string::npos) {
+                continue;
+            }
+
             line = to_lower(line);
+
             if (line.find(formatted_topic) == std::string::npos) {
                 continue;
             }
 
-            std::cout << "FOUND computer science" << std::endl;
-
-            const auto [year, paper_authors] = get_paper_authors(line);
-
-            if (paper_authors.empty()) {
-                continue;
-            }
-
-            bool keep_paper = std::ranges::any_of(paper_authors, [&](const std::string &authorid) {
-                const auto it = author_affiliations.find(authorid);
-                if (it == author_affiliations.end()) {
-                    return false;
-                }
-
-                const std::vector<std::vector<std::string>> &aff_years = it->second;
-                if (year <= 0 || static_cast<size_t>(year) >= aff_years.size()) {
-                    return false;
-                }
-
-                // Affiliations for the current year
-                if (const std::vector<std::string> &current_affiliation = aff_years[year];
-                    std::ranges::find(current_affiliation, affiliation_country) !=
-                    current_affiliation.end()) {
-                    return true;
-                }
-
-                // Search for closest previous year
-                for (auto prev = year - 1; prev >= 0; --prev) {
-                    if (const std::vector<std::string> &previous_affiliation = aff_years[prev];
-                        !previous_affiliation.empty()) {
-                        return std::ranges::find(previous_affiliation, affiliation_country) !=
-                               previous_affiliation.end();
-                    }
-                }
-
-                return false;
-            });
-
-            if (keep_paper) {
-                out << line << '\n';
-            }
+            out << line << '\n';
         }
 
         out.flush();
 
     } catch (const std::exception &e) {
-        error_colored("Failed to decompress/parse " + gz_path.string() + ": " +
+        error_colored("Failed to decompress " + gz_path.string() + ": " +
                       std::string(e.what()));
     }
 }
