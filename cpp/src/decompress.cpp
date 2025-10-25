@@ -122,7 +122,13 @@ void process_single_paper_file(
                 continue;
             }
 
+            std::cout << "FOUND computer science" << std::endl;
+
             const auto [year, paper_authors] = get_paper_authors(line);
+
+            if (paper_authors.empty()) {
+                continue;
+            }
 
             bool keep_paper = std::ranges::any_of(paper_authors, [&](const std::string &authorid) {
                 const auto it = author_affiliations.find(authorid);

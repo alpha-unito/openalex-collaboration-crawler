@@ -207,19 +207,25 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
 }
 
 std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string raw_json) {
-    simdjson::ondemand::parser parser;
-    simdjson::padded_string json_line(raw_json);
-    auto doc = parser.iterate(json_line);
+    try {
+        simdjson::ondemand::parser parser;
+        simdjson::padded_string json_line(raw_json);
+        auto doc = parser.iterate(json_line);
 
-    // Extract publication_year
-    uint64_t pub_year = doc["publication_year"].get_uint64();
+        // Extract publication_year
+        uint64_t pub_year = doc["publication_year"].get_uint64();
 
-    // Extract list of author IDs
-    std::vector<std::string> author_ids;
-    for (auto author_entry : doc["authorships"]) {
-        std::string_view id = author_entry["author"]["id"].get_string();
-        author_ids.emplace_back(id);
+        // Extract list of author IDs
+        std::vector<std::string> author_ids;
+        for (auto author_entry : doc["authorships"]) {
+            std::string_view id = author_entry["author"]["id"].get_string();
+            author_ids.emplace_back(id);
+        }
+
+        return {pub_year, author_ids};
+    } catch (...) {
+        std::cout << "Unable to parse JSON line: " << raw_json << std::endl;
     }
 
-    return {pub_year, author_ids};
+    return {};
 }

@@ -98,7 +98,8 @@ int main(int argc, const char **argv) {
     info_colored("Topic filter: " + topic_filter);
     warn_colored("=============================");
 
-    auto author_affiliations = load_authors_affiliations(author_input_file);
+    std::unordered_map<std::string, std::vector<std::vector<std::string>>> author_affiliations;
+    // = load_authors_affiliations(author_input_file);
 
     info_colored("Starting extractor phase");
 
