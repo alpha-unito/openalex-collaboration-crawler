@@ -56,13 +56,8 @@ parse_cli(int argc, const char **argv) {
         std::exit(1);
     }
 
-    if (!input_dir) {
-        std::cerr << "Missing required -i/--openalex-input-dir\n" << parser;
-        std::exit(2);
-    }
-
     auto country_code_filter = coutry_filter ? args::get(coutry_filter) : "";
-    auto input_dir_string    = args::get(input_dir) + "/data/works";
+    auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
     auto author_file         = author_filter_file ? args::get(author_filter_file) : "";
     auto topic_filter        = topic ? args::get(topic) : "";
@@ -76,19 +71,77 @@ int main(int argc, const char **argv) {
     auto [country_code_filter, input_dir, output_filename, author_input_file, topic_filter] =
         parse_cli(argc, argv);
 
+    if (input_dir.empty()) {
+        error_colored("No input dir for AWS snapshot provided.");
+        exit(EXIT_FAILURE);
+    }
+
+    if (country_code_filter.empty()) {
+        error_colored("No country code filter provided.");
+        exit(EXIT_FAILURE);
+    }
+
+    if (author_input_file.empty()) {
+        error_colored("No author filter file provided.");
+        exit(EXIT_FAILURE);
+    }
+
+    if (topic_filter.empty()) {
+        error_colored("No topic filter provided.");
+        exit(EXIT_FAILURE);
+    }
+
     info_colored("Openalex AWS snapshot directory: " + input_dir);
     info_colored("Output file: " + output_filename);
-    if (!country_code_filter.empty()) {
-        info_colored("Apply filter for country code: " + country_code_filter);
-    }
+    info_colored("Apply filter for country code: " + country_code_filter);
+    info_colored("Author filter file: " + author_input_file);
+    info_colored("Topic filter: " + topic_filter);
+    warn_colored("=============================");
 
-    if (!author_input_file.empty()) {
-        info_colored("Author filter file: " + author_input_file);
-    }
-
-    if (!topic_filter.empty()) {
-        info_colored("Topic filter: " + topic_filter);
-    }
+    auto author_affiliations = load_authors_affiliations(author_input_file);
 
     info_colored("Starting extractor phase");
+
+    const auto paths = find_gz_files(input_dir + "data/works/");
+
+    const unsigned num_threads =
+        std::min<unsigned>(get_num_threads(), static_cast<unsigned>(paths.size()));
+
+    std::atomic<std::size_t> next_index{0};
+    std::vector<std::jthread> workers;
+    workers.reserve(num_threads);
+
+    const auto number_of_files_to_process = paths.size();
+    info_colored("Processing " + std::to_string(number_of_files_to_process) + " files");
+
+    auto extract_bar = get_progress_bar("Extracted files", paths.size());
+    std::mutex bar_mtx;
+
+    for (unsigned t = 0; t < num_threads; ++t) {
+        workers.emplace_back([&, t] {
+            std::string part_path = "/tmp/paper_extraction.part." + std::to_string(t);
+            std::ofstream out(part_path, std::ios::binary | std::ios::trunc);
+            if (!out) {
+                fmt::print(stderr, "Cannot create {}\n", part_path);
+                return;
+            }
+            while (true) {
+                const std::size_t i = next_index.fetch_add(1, std::memory_order_relaxed);
+                if (i >= number_of_files_to_process) {
+                    break;
+                }
+
+                // TODO: Process single paper file
+
+                {
+                    std::scoped_lock lk(bar_mtx);
+                    extract_bar.tick();
+                }
+            }
+        });
+    }
+
+    for (auto &th : workers) {
+        th.join();
+    }
 }

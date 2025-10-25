@@ -15,7 +15,6 @@
 #include <string>
 #include <vector>
 
-// Reads a .gz file fully into memory and decompresses it
 std::vector<char> read_gz_to_memory(const std::string &gz_path) {
     if (!std::filesystem::exists(gz_path)) {
         throw std::runtime_error("File not found: " + gz_path);
