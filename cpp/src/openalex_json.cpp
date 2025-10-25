@@ -140,9 +140,8 @@ std::unordered_map<std::string, std::vector<std::vector<std::string>>>
 load_authors_affiliations(const std::filesystem::path &author_file) {
     std::error_code ec;
     auto sz = std::filesystem::file_size(author_file, ec);
-    if (ec) {
-        throw std::runtime_error("Cannot stat file: " + author_file.string());
-    }
+
+    info_colored("Started author loading phase");
 
     auto load_bar = get_progress_bar("Loading authors in memory", sz);
 
