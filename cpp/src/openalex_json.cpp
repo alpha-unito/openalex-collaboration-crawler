@@ -1,8 +1,15 @@
+#include <fcntl.h>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <simdjson.h>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -138,31 +145,39 @@ void load_and_compress_authors(AffMap &affiliation_dataset, std::string &country
  */
 std::unordered_map<std::string, std::vector<std::vector<std::string>>>
 load_authors_affiliations(const std::filesystem::path &author_file) {
-    std::error_code ec;
-    auto sz = std::filesystem::file_size(author_file, ec);
-
-    info_colored("Started loading author file: " + author_file.string());
-
-    auto load_bar = get_progress_bar("Loading authors in memory", sz);
-
-    std::ifstream infile(author_file, std::ios::binary);
-    if (!infile) {
-        throw std::runtime_error("Unable to open " + author_file.string());
+    int fd = open(author_file.c_str(), O_RDONLY);
+    if (fd < 0) {
+        throw std::runtime_error("Cannot open " + author_file.string());
     }
 
-    std::string buffer(sz, '\0');
-    infile.read(buffer.data(), sz);
-    infile.close();
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+        throw std::runtime_error("Cannot stat file " + author_file.string());
+    }
+
+    size_t sz = sb.st_size;
+    if (sz == 0) {
+        throw std::runtime_error("File is empty: " + author_file.string());
+    }
+
+    void *file_data = mmap(nullptr, sz, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (file_data == MAP_FAILED) {
+        throw std::runtime_error("mmap failed for " + author_file.string());
+    }
+
+    close(fd);
+
+    const char *start = static_cast<const char *>(file_data);
+    const char *end   = start + sz;
 
     simdjson::ondemand::parser parser;
     std::unordered_map<std::string, std::vector<std::vector<std::string>>> authors;
     authors.reserve(100000);
 
-    size_t progress        = 0;
-    const char *start      = buffer.data();
-    const char *end        = start + buffer.size();
-    const char *line_start = start;
-    size_t update_interval = 1 << 16; // update every 64KB
+    size_t progress              = 0;
+    auto load_bar                = get_progress_bar("Loading authors in memory", sz);
+    const char *line_start       = start;
+    const size_t update_interval = 1 << 20; // update every 1 MB
 
     while (line_start < end) {
         const char *line_end =
@@ -172,7 +187,7 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
         }
 
         size_t len = line_end - line_start;
-        if (len > 0) {
+        if (len > 1) { // skip empty lines
             simdjson::padded_string_view json_line(line_start, len);
             auto doc = parser.iterate(json_line);
 
@@ -214,6 +229,8 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
             load_bar.set_progress(progress);
         }
     }
+
+    munmap(file_data, sz);
 
     load_bar.mark_as_completed();
     info_colored("Loaded " + std::to_string(authors.size()) + " authors");
