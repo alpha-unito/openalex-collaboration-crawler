@@ -158,7 +158,8 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
         }
 
         // Parse each line as an individual JSON object
-        simdjson::padded_string json_line(line);
+        std::string_view _line(line);
+        simdjson::padded_string json_line(_line);
         auto doc = parser.iterate(json_line);
 
         // Extract "id"
