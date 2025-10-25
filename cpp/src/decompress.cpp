@@ -86,11 +86,18 @@ std::vector<std::string> find_gz_files(const std::string &root) {
     }
     return paths;
 }
+
+std::string to_lower(std::string s) {
+    std::ranges::transform(s, s.begin(), [](unsigned char c) { return std::tolower(c); });
+    return s;
+}
+
 void process_single_paper_file(
     const std::filesystem::path &gz_path, std::ofstream &out,
     const std::string &affiliation_country, const std::string &topic,
     const std::unordered_map<std::string, std::vector<std::vector<std::string>>>
         &author_affiliations) {
+
     try {
         std::ifstream file(gz_path, std::ios::binary);
         if (!file) {
@@ -102,7 +109,7 @@ void process_single_paper_file(
         in.push(boost::iostreams::gzip_decompressor());
         in.push(file);
 
-        const std::string formatted_topic = "\"" + topic + "\"";
+        const std::string formatted_topic = to_lower(topic);
         std::string line;
 
         while (std::getline(in, line)) {
@@ -110,6 +117,7 @@ void process_single_paper_file(
                 continue;
             }
 
+            line = to_lower(line);
             if (line.find(formatted_topic) == std::string::npos) {
                 continue;
             }
