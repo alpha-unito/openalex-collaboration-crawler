@@ -212,7 +212,6 @@ std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::strin
         simdjson::padded_string json_line(raw_json);
         auto doc = parser.iterate(json_line);
 
-        // Extract publication_year
         uint64_t pub_year = doc["publication_year"].get_uint64();
 
         // Extract list of author IDs

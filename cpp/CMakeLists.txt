@@ -100,6 +100,29 @@ target_link_libraries(openalex_papers PRIVATE
 )
 
 # -----------------------------
+# Executable: openalex_graph
+# -----------------------------
+add_executable(openalex_graph
+        ${PROJECT_SOURCES}
+        graph.cpp
+)
+
+target_include_directories(openalex_graph PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${args_SOURCE_DIR}
+        ${indicators_SOURCE_DIR}/include
+        ${boost_SOURCE_DIR}
+        ${simdjson_SOURCE_DIR}/include
+)
+
+target_link_libraries(openalex_graph PRIVATE
+        fmt::fmt
+        Boost::iostreams
+        Boost::filesystem
+        simdjson::simdjson
+)
+
+# -----------------------------
 # Status summary
 # -----------------------------
 message(STATUS "--------------------------------------------------")

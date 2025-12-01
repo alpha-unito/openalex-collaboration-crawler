@@ -30,11 +30,11 @@ parse_cli(int argc, const char **argv) {
     args::ValueFlag<std::string> output(parser, "FILE", "Output file name",
                                         {'o', "output-file-name"});
 
-    args::ValueFlag<std::string> coutry_filter(parser, "COUNTRY_CODE", "Country of affiliation ",
+    args::ValueFlag<std::string> country_filter(parser, "COUNTRY_CODE", "Country of affiliation ",
                                                {'c', "country-code-filter"});
 
     args::ValueFlag<std::string> author_filter(
-        parser, "author-filter",
+        parser, "FILE",
         "Input file wth authors to filter in. Set either author-file or topic",
         {'a', "author-file"});
 
@@ -62,11 +62,11 @@ parse_cli(int argc, const char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    auto country_code_filter = coutry_filter ? args::get(coutry_filter) : "";
+    auto country_code_filter = country_filter ? args::get(country_filter) : "";
     auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
 
-    // TODO: Expand also to subfields
+
     auto topic_filter      = topic_id ? "https://openalex.org/fields/" + args::get(topic_id) : "";
     auto author_filter_str = author_filter ? args::get(author_filter) : "";
 

@@ -13,4 +13,6 @@ using AffMap  = std::unordered_map<std::string, YearMap>;
 
 unsigned get_num_threads();
 void merge_files(const std::vector<std::string> &source_files, const std::string &output_file);
+std::vector<std::string> split_str(const std::string &s, char delim);
+void seek_to_line_start(std::ifstream &ifs, std::uint64_t offset) ;
 #endif // OPENALEX_AUTHORS_CPP_UTILS_H
