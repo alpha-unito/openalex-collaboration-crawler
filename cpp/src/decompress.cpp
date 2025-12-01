@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -93,7 +94,8 @@ std::string to_lower(std::string s) {
 }
 
 void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstream &out,
-                               const std::string &affiliation_country, const std::string &topic) {
+                               const std::string &affiliation_country, const std::string &topic,
+                               const std::set<std::string> &keep_author_list) {
 
     try {
         std::ifstream file(gz_path, std::ios::binary);
@@ -118,8 +120,21 @@ void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstre
                 continue;
             }
 
-            if (line.find(topic) == std::string::npos) {
+            if (!topic.empty() && line.find(topic) == std::string::npos) {
                 continue;
+            }
+
+            if (!keep_author_list.empty()) {
+                const auto authors = std::get<1>(get_paper_authors(line));
+                if (!std::ranges::any_of(authors, [&keep_author_list](const auto &a) {
+                        std::string lower = a;
+                        std::ranges::transform(lower, lower.begin(), [](const unsigned char c) {
+                            return std::tolower(c);
+                        });
+                        return keep_author_list.contains(lower);
+                    })) {
+                    continue;
+                }
             }
 
             out << line << '\n';

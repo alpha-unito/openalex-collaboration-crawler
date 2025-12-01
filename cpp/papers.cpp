@@ -5,6 +5,7 @@
 #include <iostream>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -19,8 +20,8 @@
 #include "utils.h"
 #include <args.hxx>
 
-static std::tuple<std::string, std::string, std::string, std::string> parse_cli(int argc,
-                                                                                const char **argv) {
+static std::tuple<std::string, std::string, std::string, std::string, std::string>
+parse_cli(int argc, const char **argv) {
     args::ArgumentParser parser("OpenAlex Collaboration Crawler / authors step");
     args::HelpFlag help(parser, "help", "Show help", {'h', "help"});
 
@@ -32,11 +33,16 @@ static std::tuple<std::string, std::string, std::string, std::string> parse_cli(
     args::ValueFlag<std::string> coutry_filter(parser, "COUNTRY_CODE", "Country of affiliation ",
                                                {'c', "country-code-filter"});
 
+    args::ValueFlag<std::string> author_filter(
+        parser, "author-filter",
+        "Input file wth authors to filter in. Set either author-file or topic",
+        {'a', "author-file"});
+
     args::ValueFlag<std::string> topic_id(
         parser, "NUMBER",
         "ID of targeted topic. Get it from https://openalex.org/fields/. For example, for "
-        "\"Computer science\" has Field ID 178",
-        {'f', "field"});
+        "\"Computer science\" has Field ID 178. Set either author-file or topic",
+        {'t', "topic"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -51,19 +57,27 @@ static std::tuple<std::string, std::string, std::string, std::string> parse_cli(
         std::exit(1);
     }
 
+    if (topic_id && author_filter) {
+        error_colored("Set both Topic filter and author filter");
+        exit(EXIT_FAILURE);
+    }
+
     auto country_code_filter = coutry_filter ? args::get(coutry_filter) : "";
     auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
 
     // TODO: Expand also to subfields
-    auto topic_filter = topic_id ? "https://openalex.org/fields/" + args::get(topic_id) : "";
+    auto topic_filter      = topic_id ? "https://openalex.org/fields/" + args::get(topic_id) : "";
+    auto author_filter_str = author_filter ? args::get(author_filter) : "";
 
     return {country_code_filter, std::filesystem::canonical(input_dir_string),
-            std::filesystem::weakly_canonical(output_file_name), topic_filter};
+            std::filesystem::weakly_canonical(output_file_name), topic_filter,
+            std::filesystem::weakly_canonical(author_filter_str)};
 }
 
 int main(int argc, const char **argv) {
-    auto [country_code_filter, input_dir, output_filename, topic_filter] = parse_cli(argc, argv);
+    auto [country_code_filter, input_dir, output_filename, topic_filter, author_filter_file] =
+        parse_cli(argc, argv);
 
     if (input_dir.empty()) {
         error_colored("No input dir for AWS snapshot provided.");
@@ -75,16 +89,27 @@ int main(int argc, const char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    if (topic_filter.empty()) {
-        error_colored("No Field give. Search for a valid ID at https://openalex.org/fields/");
-        exit(EXIT_FAILURE);
-    }
-
     info_colored("Openalex AWS snapshot: " + input_dir);
     info_colored("Output  file: " + output_filename);
     info_colored("Country code: " + country_code_filter);
     info_colored("Topic filter: " + topic_filter);
+    info_colored("Author filter list: " + author_filter_file);
     warn_colored("=============================");
+
+    std::set<std::string> author_filter_list;
+
+    if (std::ifstream input_author_filter_file(author_filter_file);
+        input_author_filter_file.is_open()) {
+
+        std::string author_name;
+        while (std::getline(input_author_filter_file, author_name)) {
+            if (!author_name.empty()) {
+                author_filter_list.insert(author_name);
+            }
+        }
+
+        info_colored("Loaded " + std::to_string(author_filter_list.size()) + " authors");
+    }
 
     const auto paths = find_gz_files(input_dir);
 
@@ -115,7 +140,8 @@ int main(int argc, const char **argv) {
                     break;
                 }
 
-                process_single_paper_file(paths.at(i), out, country_code_filter, topic_filter);
+                process_single_paper_file(paths.at(i), out, country_code_filter, topic_filter,
+                                          std::ref(author_filter_list));
 
                 {
                     std::scoped_lock lk(bar_mtx);

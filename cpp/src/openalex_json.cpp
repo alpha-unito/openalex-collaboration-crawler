@@ -206,7 +206,7 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
     return authors;
 }
 
-std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string raw_json) {
+std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string& raw_json) {
     try {
         simdjson::ondemand::parser parser;
         simdjson::padded_string json_line(raw_json);
@@ -218,13 +218,13 @@ std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::strin
         // Extract list of author IDs
         std::vector<std::string> author_ids;
         for (auto author_entry : doc["authorships"]) {
-            std::string_view id = author_entry["author"]["id"].get_string();
+            std::string_view id = author_entry["author"]["display_name"].get_string();
             author_ids.emplace_back(id);
         }
 
         return {pub_year, author_ids};
     } catch (...) {
-        std::cout << "Unable to parse JSON line: " << raw_json << std::endl;
+        std::cout << "Unable to parse JSON line! " << std::endl;
     }
 
     return {};
