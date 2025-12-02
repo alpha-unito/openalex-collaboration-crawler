@@ -1,14 +1,12 @@
 # OpenAlex Collaboration Crawler
 
-[![Rust](https://img.shields.io/badge/Made%20with-Rust-orange?logo=rust)](https://www.rust-lang.org/)
+[![C++](https://img.shields.io/badge/Made%20with-C++-orange?logo=c)]()
 
 This repository contains the code to **extract and generate temporal collaboration networks** using data from
 the [OpenAlex](https://openalex.org) snapshot.
 
 The workflow is composed of several modular tools, each responsible for a specific step in the data extraction and
 transformation process.
-
-<img src="extra/OpenAlexGraphGen-wf.png" alt="Workflow diagram">
 
 An example of the produced dataset can be found at:
 
