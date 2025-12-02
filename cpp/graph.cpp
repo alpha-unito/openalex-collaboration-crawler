@@ -230,7 +230,8 @@ int main(int argc, const char **argv) {
             output_file_name += output_file_base;
             intervals.push_back({start, end, range});
             auto mtx = std::make_shared<std::mutex>();
-            auto ofs = std::make_shared<std::ofstream>(output_file_name, std::ios::out | std::ios::trunc);
+            auto ofs =
+                std::make_shared<std::ofstream>(output_file_name, std::ios::out | std::ios::trunc);
             if (!ofs->is_open()) {
                 error_colored("Unable to open output file: " + output_file_name);
                 return 1;
@@ -307,6 +308,8 @@ int main(int argc, const char **argv) {
                               ": unable to open metadata part file");
                 return;
             }
+
+            meta_ofs << "work_id,year,num_of_authors,topics\n";
 
             simdjson::ondemand::parser parser;
 
@@ -424,8 +427,9 @@ int main(int argc, const char **argv) {
                     }
                 }
 
-                // Store associated metadata files
-                meta_ofs << id_str << "," << topic_list << "\n";
+                // Store metadatas
+                meta_ofs << id_str << "," << std::to_string(pub_year) << ","
+                         << std::to_string(author_vector.size()) << "," << topic_list << "\n";
 
                 // write edges to appropriate interval file (first matching interval)
                 for (size_t idx = 0; idx < intervals.size(); ++idx) {
