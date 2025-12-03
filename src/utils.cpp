@@ -83,50 +83,45 @@ int split_graph_to_single_years(const std::string &input_file, const std::string
 
     std::unordered_map<std::string, std::ofstream> yearFiles;
 
-    // Iterate over files in current directory
-    for (const auto &entry : std::filesystem::directory_iterator(std::filesystem::current_path())) {
-        if (entry.path().extension() == ".csv" && entry.path().filename() != "split_by_year.csv") {
-            std::ifstream infile(entry.path());
-            if (!infile.is_open()) {
-                std::cerr << "Failed to open: " << entry.path() << std::endl;
+    std::ifstream infile(input_file);
+    if (!infile.is_open()) {
+        error_colored("Unable to open input file: " + input_file);
+        return -1;
+    }
+
+    std::string line;
+    while (std::getline(infile, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        std::vector<std::string> tokens = split_str(line, ',');
+        if (tokens.empty()) {
+            continue;
+        }
+
+        const std::string &year = tokens[0];
+
+        // Create and cache the output stream for the year
+        if (!yearFiles.contains(year)) {
+            std::string yearFilePath = output_dir + "/" + year + ".csv";
+            yearFiles[year].open(yearFilePath, std::ios::app);
+            if (!yearFiles[year].is_open()) {
+                error_colored("Failed to open output file for year: " + year);
                 continue;
             }
-
-            std::string line;
-            while (std::getline(infile, line)) {
-                if (line.empty()) {
-                    continue;
-                }
-
-                std::vector<std::string> tokens = split_str(line, ',');
-                if (tokens.empty()) {
-                    continue;
-                }
-
-                const std::string &year = tokens[0];
-
-                // Create and cache the output stream for the year
-                if (!yearFiles.contains(year)) {
-                    std::string yearFilePath = output_dir + "/" + year + ".csv";
-                    yearFiles[year].open(yearFilePath, std::ios::app);
-                    if (!yearFiles[year].is_open()) {
-                        std::cerr << "Failed to open output file for year: " << year << std::endl;
-                        continue;
-                    }
-                }
-
-                yearFiles[year] << line << '\n';
-            }
-
-            infile.close();
         }
+
+        yearFiles[year] << line << '\n';
     }
+
+    infile.close();
 
     // Close all output files
     for (auto &pair : yearFiles) {
         pair.second.close();
     }
 
-    std::cout << "CSV files processed and output saved to ./output/" << std::endl;
+    ok_colored("CSV files processed and output saved to " + output_dir);
     return 0;
 }
