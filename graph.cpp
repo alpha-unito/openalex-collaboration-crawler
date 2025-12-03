@@ -39,10 +39,11 @@ static ArgsParsed parse_cli(int argc, const char **argv) {
     args::ArgumentParser parser("OpenAlex adjacency list generator (C++ port)");
     args::HelpFlag help(parser, "help", "Show help", {'h', "help"});
 
-    args::ValueFlag<std::string> format(parser, "FORMAT",
-                                        "Format of how to split years (comma separated list "
-                                        "of ranges like 1990-2000).",
-                                        {"format"});
+    args::ValueFlag<std::string> format(
+        parser, "FORMAT",
+        "Format of how to split years (comma separated list "
+        "of ranges like 1990-2000). Both interval extremes are inclusive`",
+        {"format"});
     args::ValueFlag<std::string> input(parser, "INPUT", "Input JSONL file", {"input"});
     args::ValueFlag<std::string> output(parser, "OUTPUT", "Output base file name", {"output"});
     args::ValueFlag<std::string> extract_weighted(
@@ -129,7 +130,9 @@ struct TimeInterval {
     uint64_t start, end;
     std::string file_name;
 
-    bool isBetweenThisInterval(const int year) const { return start <= year && year < end; }
+    [[nodiscard]] bool isBetweenThisInterval(const int year) const {
+        return start <= year && year <= end;
+    }
 };
 
 int handle_generate_weighted(const std::string &input_file_name) {
