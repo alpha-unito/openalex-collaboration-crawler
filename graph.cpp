@@ -84,28 +84,6 @@ static ArgsParsed parse_cli(int argc, const char **argv) {
     return parameters;
 }
 
-struct UnorderedPair {
-    std::string a;
-    std::string b;
-    UnorderedPair() = default;
-    UnorderedPair(std::string x, std::string y) {
-        if (x <= y) {
-            a = std::move(x);
-            b = std::move(y);
-        } else {
-            a = std::move(y);
-            b = std::move(x);
-        }
-    }
-    bool operator==(UnorderedPair const &o) const noexcept { return a == o.a && b == o.b; }
-};
-
-struct UnorderedPairHash {
-    std::size_t operator()(UnorderedPair const &p) const noexcept {
-        return std::hash<std::string>{}(p.a) ^ (std::hash<std::string>{}(p.b) << 1);
-    }
-};
-
 static std::vector<std::string> extract_topics(simdjson::ondemand::array concepts) {
     std::vector<std::string> out;
     for (simdjson::ondemand::value v : concepts) {
@@ -138,47 +116,96 @@ struct TimeInterval {
 int handle_generate_weighted(const std::string &input_file_name) {
     info_colored("Generating weighted graph from CSV file: " + input_file_name);
 
-    std::ifstream ifs(input_file_name);
-    if (!ifs) {
-        error_colored("Error: unable to open " + input_file_name);
-        return 1;
-    }
-
     uint64_t total_size = 0;
     try {
         total_size = std::filesystem::file_size(input_file_name);
     } catch (...) {
         total_size = 0;
     }
-    auto bar = get_progress_bar("Loading & compressing CSV", total_size);
-    std::unordered_map<UnorderedPair, uint64_t, UnorderedPairHash> weights;
-    std::string line;
-    while (std::getline(ifs, line)) {
-        if (line.empty()) {
-            continue;
-        }
-        bar.set_progress(bar.current() + line.size() + 1);
+    auto bar                 = get_progress_bar("Loading & compressing CSV", total_size);
+    uint64_t total_read_size = 0;
+    std::mutex bar_mtx;
 
-        std::vector<std::string> items = split_str(line, ',');
-        if (items.size() <= 3) {
-            continue;
-        }
-        std::string a = items[2];
-        std::string b = items[3];
-        // strip whitespace
-        auto trim     = [](std::string &s) {
-            size_t p1 = s.find_first_not_of(" \t\r\n");
-            size_t p2 = s.find_last_not_of(" \t\r\n");
-            if (p1 == std::string::npos) {
-                s.clear();
-                return;
+    const auto num_threads = get_num_threads();
+
+    typedef std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>> AdjMatrix;
+    AdjMatrix weights;
+
+    std::vector<AdjMatrix> thread_adjacency_matrix;
+    std::vector<std::thread> compute_threads;
+
+    for (int i = 0; i < num_threads; ++i) {
+        thread_adjacency_matrix.emplace_back();
+    }
+
+    uint64_t chunk_size = total_size / num_threads;
+
+    for (int i = 0; i < num_threads; ++i) {
+        compute_threads.emplace_back([&, ID = i]() {
+            auto &local_adj       = thread_adjacency_matrix[ID];
+            uint64_t bytes_read   = 0;
+            uint64_t start_offset = ID * chunk_size;
+            uint64_t end_offset   = (ID == num_threads - 1) ? total_size : ((ID + 1) * chunk_size);
+            std::ifstream ifs(input_file_name);
+            if (!ifs) {
+                error_colored("Error: unable to open " + input_file_name);
+                return 1;
             }
-            s = s.substr(p1, p2 - p1 + 1);
-        };
-        trim(a);
-        trim(b);
-        UnorderedPair up(a, b);
-        weights[up] += 1;
+
+            seek_to_line_start(ifs, start_offset);
+
+            std::string line;
+            while (std::getline(ifs, line)) {
+                if (line.empty()) {
+                    continue;
+                }
+
+                bytes_read += line.size() + 1;
+
+                if (bytes_read % 10000 == 0) {
+                    std::lock_guard lock(bar_mtx);
+                    total_read_size += bytes_read;
+                }
+
+                if (uint64_t absolute = start_offset + bytes_read;
+                    ID != num_threads - 1 && absolute >= end_offset) {
+                    break;
+                }
+
+                unsigned long year, a, b;
+                char trash_author[128];
+
+                if (sscanf(line.c_str(), "%lu,%127[^,],A%lu,A%lu", &year, trash_author, &a, &b) !=
+                    4) {
+                    error_colored("Error: unable to parse " + line);
+                    continue;
+                }
+
+                const auto first_key  = std::min(a, b);
+                const auto second_key = std::max(a, b);
+
+                local_adj[first_key][second_key] += 1;
+            }
+            return 0;
+        });
+    }
+
+    while (total_read_size < total_size) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        bar.set_progress(total_read_size);
+    }
+
+    for (auto &th : compute_threads) {
+        th.join();
+    }
+
+    ok_colored("Merging local thread matrixes");
+    for (const auto &th_matrix : thread_adjacency_matrix) {
+        for (const auto &[first_author, collaborations] : th_matrix) {
+            for (const auto &[second_author, collab_count] : collaborations) {
+                weights[first_author][second_author] += collab_count;
+            }
+        }
     }
 
     std::string output_file_name =
@@ -189,9 +216,16 @@ int handle_generate_weighted(const std::string &input_file_name) {
         warn_colored("Unable to create output file: " + output_file_name);
         return 1;
     }
-    for (auto const &kv : weights) {
-        ofs << kv.first.a << "," << kv.first.b << "," << kv.second << "\n";
+
+    for (const auto &[first_author, first_author_collabs] : weights) {
+        for (const auto &[second_author, collab_count] : first_author_collabs) {
+            if (collab_count > 0) {
+                ofs << "A" << first_author << "," << "A" << second_author << "," << collab_count
+                    << "\n";
+            }
+        }
     }
+
     info_colored("Done");
     return 0;
 }
