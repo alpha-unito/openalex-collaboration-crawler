@@ -125,14 +125,19 @@ void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstre
             }
 
             if (!keep_author_list.empty()) {
-                const auto authors = std::get<1>(get_paper_authors(line));
-                if (!std::ranges::any_of(authors, [&keep_author_list](const auto &a) {
-                        std::string lower = a;
-                        std::ranges::transform(lower, lower.begin(), [](const unsigned char c) {
-                            return std::tolower(c);
-                        });
-                        return keep_author_list.contains(lower);
-                    })) {
+                const auto authors = get_paper_authors(line);
+
+                bool found = std::ranges::any_of(authors, [&](const auto &a) {
+                    auto [author_name, affiliation] = a;
+                    if (affiliation.find(affiliation_country) == std::string::npos) {
+                        return false;
+                    }
+                    std::ranges::transform(author_name, author_name.begin(),
+                                           [](const unsigned char c) { return std::tolower(c); });
+                    return keep_author_list.contains(author_name);
+                });
+
+                if (!found) {
                     continue;
                 }
             }

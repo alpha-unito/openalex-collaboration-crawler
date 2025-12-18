@@ -206,25 +206,43 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
     return authors;
 }
 
-std::tuple<int64_t, std::vector<std::string>> get_paper_authors(const std::string& raw_json) {
+std::vector<std::pair<std::string, std::string>> get_paper_authors(const std::string &raw_json) {
+    std::vector<std::pair<std::string, std::string>> authors;
+
     try {
         simdjson::ondemand::parser parser;
         simdjson::padded_string json_line(raw_json);
-        auto doc = parser.iterate(json_line);
+        simdjson::ondemand::document doc = parser.iterate(json_line);
 
-        uint64_t pub_year = doc["publication_year"].get_uint64();
+        simdjson::ondemand::array authorships = doc["authorships"];
 
-        // Extract list of author IDs
-        std::vector<std::string> author_ids;
-        for (auto author_entry : doc["authorships"]) {
-            std::string_view id = author_entry["author"]["display_name"].get_string();
-            author_ids.emplace_back(id);
+        for (simdjson::ondemand::object author_entry : authorships) {
+            std::string name;
+            std::string affiliation;
+
+            if (auto name_result = author_entry["author"]["display_name"].get_string();
+                !name_result.error()) {
+                name = std::string(name_result.value());
+            }
+
+            if (auto countries_field = author_entry.find_field("countries");
+                !countries_field.error()) {
+                simdjson::ondemand::array countries = countries_field.get_array();
+                for (simdjson::ondemand::value country : countries) {
+
+                    if (auto country_str = country.get_string(); !country_str.error()) {
+                        affiliation += "," + std::string(country_str.value());
+                    }
+                }
+            }
+
+            authors.emplace_back(std::move(name), std::move(affiliation));
         }
 
-        return {pub_year, author_ids};
-    } catch (...) {
-        std::cout << "Unable to parse JSON line! " << std::endl;
+    } catch (const simdjson::simdjson_error &e) {
+        std::cerr << "Unable to parse JSON line: " << e.what() << '\n';
+        return {};
     }
 
-    return {};
+    return authors;
 }
