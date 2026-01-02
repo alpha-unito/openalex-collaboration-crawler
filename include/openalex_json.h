@@ -11,6 +11,7 @@ parse_json_author_line(std::string_view json_line);
 void load_and_compress_authors(AffMap &affiliation_dataset, std::string &country_code_filter);
 std::unordered_map<std::string, std::vector<std::vector<std::string>>>
 load_authors_affiliations(const std::filesystem::path &author_file);
-std::vector<std::pair<std::string, std::string>> get_paper_authors(const std::string &raw_json);
+std::vector<std::pair<std::string, std::string>> get_paper_authors(const std::string &raw_json, const std::string &concept_filter,
+                  double confidency);
 
 #endif // OPENALEX_AUTHORS_CPP_OPENALEX_JSON_H

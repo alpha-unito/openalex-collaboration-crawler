@@ -94,8 +94,9 @@ std::string to_lower(std::string s) {
 }
 
 void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstream &out,
-                               const std::string &affiliation_country, const std::string &topic,
-                               const std::set<std::string> &keep_author_list) {
+                               const std::string &affiliation_country,
+                               const std::string &concept_filter,
+                               const std::set<std::string> &keep_author_list, double confidence) {
 
     try {
         std::ifstream file(gz_path, std::ios::binary);
@@ -120,12 +121,12 @@ void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstre
                 continue;
             }
 
-            if (!topic.empty() && line.find(topic) == std::string::npos) {
+            if (!concept_filter.empty() && line.find(concept_filter) == std::string::npos) {
                 continue;
             }
 
             if (!keep_author_list.empty()) {
-                const auto authors = get_paper_authors(line);
+                const auto authors = get_paper_authors(line, concept_filter, confidence);
 
                 bool found = std::ranges::any_of(authors, [&](const auto &a) {
                     auto [author_name, affiliation] = a;

@@ -206,13 +206,32 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
     return authors;
 }
 
-std::vector<std::pair<std::string, std::string>> get_paper_authors(const std::string &raw_json) {
+std::vector<std::pair<std::string, std::string>>
+get_paper_authors(const std::string &raw_json, const std::string &concept_filter,
+                  double confidency) {
+
+    // check if concept is found in the raw json
+    if (raw_json.find(concept_filter) == std::string::npos) {
+        return {};
+    }
+
     std::vector<std::pair<std::string, std::string>> authors;
 
     try {
         simdjson::ondemand::parser parser;
         simdjson::padded_string json_line(raw_json);
         simdjson::ondemand::document doc = parser.iterate(json_line);
+
+        // if concept is found, then check that its confidence is greater that the one provided.
+        // if lower, then return an empty list of affiliations, hence skipping the paper
+        simdjson::ondemand::array concepts = doc["concepts"].get_array();
+        for (simdjson::ondemand::object _concept : concepts) {
+            const std::string _concept_string_id(_concept["id"]);
+            if (_concept_string_id == concept_filter &&
+                _concept["score"].get_double() <= confidency) {
+                return {};
+            }
+        }
 
         simdjson::ondemand::array authorships = doc["authorships"];
 

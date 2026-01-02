@@ -20,29 +20,41 @@
 #include "utils.h"
 #include <args.hxx>
 
-static std::tuple<std::string, std::string, std::string, std::string, std::string>
-parse_cli(int argc, const char **argv) {
+typedef struct {
+    std::string country_code;
+    std::string input_dir;
+    std::string output_file_name;
+    std::string concept_id;
+    std::string author_filter_file;
+    double confidence;
+} _configuration;
+
+static _configuration parse_cli(int argc, const char **argv) {
     args::ArgumentParser parser("OpenAlex Collaboration Crawler / authors step");
     args::HelpFlag help(parser, "help", "Show help", {'h', "help"});
 
     args::ValueFlag<std::string> input_dir(parser, "DIR", "OpenAlex AWS snapshot directory",
                                            {'i', "input-dir"});
-    args::ValueFlag<std::string> output(parser, "FILE", "Output file name",
-                                        {'o', "output-file-name"});
+    args::ValueFlag<std::string> output(parser, "FILE", "Output file name", {'o', "output"});
 
     args::ValueFlag<std::string> country_filter(parser, "COUNTRY_CODE", "Country of affiliation ",
-                                               {'c', "country-code-filter"});
+                                                {'c', "country"});
 
     args::ValueFlag<std::string> author_filter(
-        parser, "FILE",
-        "Input file wth authors to filter in. Set either author-file or topic",
-        {'a', "author-file"});
+        parser, "FILE", "Input file wth authors to filter in.", {'a', "author-file"});
 
-    args::ValueFlag<std::string> topic_id(
-        parser, "NUMBER",
-        "ID of targeted topic. Get it from https://openalex.org/fields/. For example, for "
-        "\"Computer science\" has Field ID 178. Set either author-file or topic",
-        {'t', "topic"});
+    args::ValueFlag<std::string> concept_id(
+        parser, "URI",
+        "URI of targeted concept. Get it from https://openalex.org/concepts/. For example, for "
+        "\"Computer science\" concept is \"https://openalex.org/C41008148\"",
+        {'c', "concept"});
+
+    args::ValueFlag<double> confidence(
+        parser, "PERCENTAGE",
+        "Minimum confidence from the OpenAlex classifier for the "
+        "paper to be classified under the provided concept. A paper is kept if its confidence "
+        "score is greater than provided value. default to 0.5",
+        {"confidence"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -57,7 +69,7 @@ parse_cli(int argc, const char **argv) {
         std::exit(1);
     }
 
-    if (topic_id && author_filter) {
+    if (concept_id && author_filter) {
         error_colored("Set both Topic filter and author filter");
         exit(EXIT_FAILURE);
     }
@@ -66,39 +78,43 @@ parse_cli(int argc, const char **argv) {
     auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
 
-
-    auto topic_filter      = topic_id ? "https://openalex.org/fields/" + args::get(topic_id) : "";
+    auto topic_filter      = concept_id ? "https://openalex.org/C" + args::get(concept_id) : "";
     auto author_filter_str = author_filter ? args::get(author_filter) : "";
 
-    return {country_code_filter, std::filesystem::canonical(input_dir_string),
-            std::filesystem::weakly_canonical(output_file_name), topic_filter,
-            std::filesystem::weakly_canonical(author_filter_str)};
+    auto confidence_value = confidence ? args::get(confidence) : 0.5;
+
+    return {country_code_filter,
+            std::filesystem::canonical(input_dir_string),
+            std::filesystem::weakly_canonical(output_file_name),
+            topic_filter,
+            std::filesystem::weakly_canonical(author_filter_str),
+            confidence_value};
 }
 
 int main(int argc, const char **argv) {
-    auto [country_code_filter, input_dir, output_filename, topic_filter, author_filter_file] =
-        parse_cli(argc, argv);
+    const auto configuration = parse_cli(argc, argv);
 
-    if (input_dir.empty()) {
+    if (configuration.input_dir.empty()) {
         error_colored("No input dir for AWS snapshot provided.");
         exit(EXIT_FAILURE);
     }
 
-    if (country_code_filter.empty()) {
+    if (configuration.country_code.empty()) {
         error_colored("No country code filter provided.");
         exit(EXIT_FAILURE);
     }
 
-    info_colored("Openalex AWS snapshot: " + input_dir);
-    info_colored("Output  file: " + output_filename);
-    info_colored("Country code: " + country_code_filter);
-    info_colored("Topic filter: " + topic_filter);
-    info_colored("Author filter list: " + author_filter_file);
+    info_colored("Openalex AWS snapshot: " + configuration.input_dir);
+    info_colored("Output  file: " + configuration.output_file_name);
+    info_colored("Country code: " + configuration.country_code);
+    info_colored("Topic filter: " + configuration.concept_id);
+    info_colored("Author filter list: " + configuration.author_filter_file);
+    info_colored("Confidence: " + std::to_string(configuration.confidence));
     warn_colored("=============================");
 
     std::set<std::string> author_filter_list;
 
-    if (std::ifstream input_author_filter_file(author_filter_file);
+    if (std::ifstream input_author_filter_file(configuration.author_filter_file);
         input_author_filter_file.is_open()) {
 
         std::string author_name;
@@ -111,7 +127,7 @@ int main(int argc, const char **argv) {
         info_colored("Loaded " + std::to_string(author_filter_list.size()) + " authors");
     }
 
-    const auto paths = find_gz_files(input_dir);
+    const auto paths = find_gz_files(configuration.input_dir);
 
     const unsigned num_threads =
         std::min<unsigned>(get_num_threads(), static_cast<unsigned>(paths.size()));
@@ -140,8 +156,9 @@ int main(int argc, const char **argv) {
                     break;
                 }
 
-                process_single_paper_file(paths.at(i), out, country_code_filter, topic_filter,
-                                          std::ref(author_filter_list));
+                process_single_paper_file(paths.at(i), out, configuration.country_code,
+                                          configuration.concept_id, std::ref(author_filter_list),
+                                          configuration.confidence);
 
                 {
                     std::scoped_lock lk(bar_mtx);
@@ -161,5 +178,5 @@ int main(int argc, const char **argv) {
         part_files.push_back("/tmp/paper_extraction.part." + std::to_string(i));
     }
 
-    merge_files(part_files, output_filename);
+    merge_files(part_files, configuration.output_file_name);
 }
