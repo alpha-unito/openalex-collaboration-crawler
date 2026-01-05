@@ -73,10 +73,15 @@ static _configuration parse_cli(int argc, const char **argv) {
     auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
 
-    auto topic_filter      = concept_id ? "https://openalex.org/C" + args::get(concept_id) : "";
+    auto topic_filter      = concept_id ? args::get(concept_id) : "";
     auto author_filter_str = author_filter ? args::get(author_filter) : "";
 
     auto confidence_value = confidence ? args::get(confidence) : 0.5;
+
+    if (!topic_filter.find("https://openalex.org/C")) {
+        error_colored("Error: not a valid CONCEPT URI!");
+        exit(EXIT_FAILURE);
+    }
 
     return {country_code_filter,
             std::filesystem::canonical(input_dir_string),
