@@ -2,7 +2,7 @@
 # Configuration and Input Paths
 # -----------------------------
 
-metadata_path = "metadata_dataset.csv"
+metadata_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/metadata_dataset.csv"
 # Path to the metadata CSV file produced during the graph-generation stage.
 # This file contains all publication- or work-level metadata used in the analysis.
 
@@ -10,19 +10,16 @@ analized_country = "Italy"
 # Country to be analyzed. Only records associated with this country will be considered.
 
 start_year = 1960  # inclusive
-end_year = 2024  # exclusive
+end_year = 2025  # exclusive
 # Time window for the analysis. Only works published within [start_year, end_year) are used.
 
-intervals_years = None
-# intervals_years = [(1960, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2023)]
+#intervals_years = None
+intervals_years = [(1960, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2023),(2024, 2024)]
 # List of year intervals for aggregating data. Each interval is a pair tuple of (start, end).
 # If None, yearly intervals are used. Only affects CCDF computations.
 
-max_topics = 10
+max_topics = 8
 # Maximum number of topics to consider when aggregating or visualizing topic distributions.
-
-plots_dpi = 700
-# Resolution (DPI) for all generated PDF figures.
 
 # ---------------------------------------
 # Output Filenames for Datasets and Plots
@@ -40,9 +37,9 @@ application_domain_plot_filename = "application_domains_over_time.pdf"
 cs_topics_over_time_plot_filename = "cs_topics_over_time.pdf"
 # Output filename for the plot tracking Computer Science topic trends over time.
 
-ccdf_input_path = "year_by_year/"
+ccdf_input_path = "/beegfs/home/msantima/openalex-collaboration-crawler/build"
 # Datasets from which to compute CCDFs will be read.
-ccdf_path = "ccdf/"
+ccdf_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/ccdf"
 # Directory where CCDF (Complementary Cumulative Distribution Function) plots or data
 # will be stored. This feature is still a work in progress.
 ccdf_graph_output_filename = './ccdfs_year_by_year.pdf'
@@ -61,12 +58,48 @@ import pandas as pd
 import seaborn as sns
 from collections import Counter
 
-from mappings import topics_mapping, application_domains_mapping
+from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete
 from topic_to_category import topic_to_category
 
 # Dictionary mapping fine-grained CS topics to broader topic categories.
 # topics_mapping: Normalizes topic names and groups synonyms/variants.
 # application_domains_mapping: Mapping to unify and filter application-domain labels.
+
+
+colors = [
+    "#1f77b4",  # blue
+    "#ff7f0e",  # orange
+    "#2ca02c",  # green
+    "#d62728",  # red
+    "#9467bd",  # purple
+    "#8c564b",  # brown
+    "#e377c2",  # pink
+    "#7f7f7f",  # gray
+    "#bcbd22",  # olive
+    "#17becf",  # cyan
+
+    "#393b79",  # dark blue
+    "#637939",  # dark olive
+    "#8c6d31",  # mustard
+    "#843c39",  # dark red
+    "#7b4173",  # plum
+    "#3182bd",  # steel blue
+    "#31a354",  # medium green
+    "#756bb1",  # lavender
+    "#636363",  # dark gray
+    "#e6550d",  # burnt orange
+
+    "#969696",  # light gray
+    "#9c9ede",  # light purple
+    "#cedb9c",  # pale green
+    "#e7ba52",  # yellow
+    "#e7969c",  # light red
+    "#6baed6",  # light blue
+    "#74c476",  # light green
+    "#fd8d3c",  # light orange
+    "#c49c94",  # tan
+    "#bdbdbd",  # silver
+]
 
 data = {}
 with open(metadata_path, 'r') as f:
@@ -140,10 +173,7 @@ ax.legend(
 )
 
 plt.tight_layout()
-plt.savefig(
-    works_per_year_plot_filename,
-    bbox_inches="tight",
-)
+plt.savefig(works_per_year_plot_filename,bbox_inches="tight")
 
 df = pd.DataFrame({"Year": x, "Papers": y})
 df.to_csv(works_per_year_plot_filename.replace(".png", ".csv"), index=False)
@@ -180,7 +210,7 @@ if intervals_years:
 
     for start, end in intervals_years:
         total_works_per_interval_x.append(start + (((end + 1) - start) / 2))
-        year_works = [len(data_sorted[str(year)]) for year in range(start, end + 1)]
+        year_works = [len(data_sorted[str(year)]) for year in range(start, end + 1) if str(year) in data_sorted]
 
         total_works_per_interval_y.append(sum(year_works))
 
@@ -220,13 +250,13 @@ if intervals_years:
     )
 
     plt.tight_layout()
-    plt.savefig(
-        "interval_" + works_per_year_plot_filename,
-        bbox_inches="tight",
-    )
+    plt.savefig( f"intervals_{works_per_year_plot_filename}", bbox_inches="tight", )
 
 
 def get_topics_by_year(data, year):
+    if not year in data:
+        return None
+    
     topics = [
         t
         for work in data[year]
@@ -235,8 +265,9 @@ def get_topics_by_year(data, year):
     topic_counts = Counter(topics)
 
     # remove 'Computer science'
-    if 'Computer science' in topic_counts:
-        del topic_counts['Computer science']
+    for domain in application_domains_to_delete:
+        if domain in topic_counts:
+            del topic_counts[domain]
 
     return topic_counts
 
@@ -295,6 +326,9 @@ for idx, year in enumerate(years):
 
     # here we get all topics by year
     topics = get_topics_by_year(data_sorted, str(year))
+    if topics is None:
+        continue
+
     # then we filter out CS topics 
     # to focus on the application domains
     filtered_topics = filter(topics, topics_mapping)
@@ -320,12 +354,10 @@ bottom = np.zeros(len(years))
 
 width = 0.75
 
-colors = sns.color_palette("muted", len(categories_over_time.items()))
-
 hatches = ['/', '\\', '|', '-', '+', 'x', 'o', '\\|', '.', '*']
 
 for i, (category, percentage) in enumerate(categories_over_time.items()):
-    plt.bar(years, percentage, width, bottom=bottom, label=category, color=colors[i], edgecolor='white',
+    plt.bar(years, percentage, width, bottom=bottom, label=category, color=colors[i % len(colors)], edgecolor='white',
             linewidth=2)  # , hatch=hatches[i % len(hatches)]
     bottom += np.array(percentage)
 
@@ -348,6 +380,10 @@ years = list(range(start_year, end_year))
 for idx, year in enumerate(years):
     # here we get all topics by year
     topics = get_topics_by_year(data_sorted, str(year))
+
+    if topics is None:
+        continue
+
     # then we filter out app domains topics 
     # to focus on CS-related subfields
     filtered_topics = filter(topics, application_domains_mapping)
@@ -384,8 +420,6 @@ bottom = np.zeros(len(years))
 
 width = 0.75
 
-colors = sns.color_palette("muted", len(cs_topics_over_time.items()))
-
 hatches = ['/', '\\', '|', '-', '+', 'x', 'o', '\\|', '.', '*']
 
 for i, (topic, percentage) in enumerate(cs_topics_over_time.items()):
@@ -419,12 +453,16 @@ def eval_ccdf(graph):
 
 def load_interval_network(input_path, start, end):
     dfs = []
-    for year in range(start, end + 1):
-        csv_path = os.path.join(input_path, f"{year}.csv")
-        if not os.path.exists(csv_path):
-            continue
-        df = pd.read_csv(csv_path, names=['year', 'work_id', 'author_id1', 'author_id2'])
+    if input_path.endswith(".csv"):
+        df = pd.read_csv(input_path, names=['year', 'work_id', 'author_id1', 'author_id2'])
         dfs.append(df)
+    else:
+        for year in range(start, end + 1):
+            csv_path = os.path.join(input_path, f"{year}.csv")
+            if not os.path.exists(csv_path):
+                continue
+            df = pd.read_csv(csv_path, names=['year', 'work_id', 'author_id1', 'author_id2'])
+            dfs.append(df)
     if not dfs:
         return None
     return pd.concat(dfs, ignore_index=True)
@@ -437,7 +475,7 @@ print(f"Processing {len(units)} CCDF units")
 os.makedirs(ccdf_path, exist_ok=True)
 
 for start, end in units:
-    label = f"{start}_{end}" if start != end else str(start)
+    label = f"{start}_{end}"
     output_path = os.path.join(ccdf_path, f"{label}.csv")
 
     print(f"Processing CCDF for {label}...")
@@ -445,8 +483,9 @@ for start, end in units:
     if os.path.exists(output_path):
         print(f"  CCDF already exists — skipping")
         continue
-
-    net_df = load_interval_network(ccdf_input_path, start, end)
+    input_file_name = f"{ccdf_input_path}/{label}_dataset.csv"
+    print(f"Loading network from {input_file_name}...")
+    net_df = load_interval_network(input_file_name, start, end)
     if net_df is None:
         print(f"  No data found — skipping")
         continue
@@ -469,10 +508,11 @@ fig, axs = plt.subplots(
 axs = axs.flatten()
 
 for i, (start, end) in enumerate(units):
-    label = f"{start}_{end}" if start != end else str(start)
+    label = f"{start}_{end}" #if start != end else str(start)
     input_path = os.path.join(ccdf_path, f"{label}.csv")
 
     if not os.path.exists(input_path):
+        print(f"CCDF data for {label} not found — skipping")
         continue
 
     deg, cs = np.loadtxt(
