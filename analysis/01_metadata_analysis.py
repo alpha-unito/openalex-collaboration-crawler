@@ -2,7 +2,7 @@
 # Configuration and Input Paths
 # -----------------------------
 
-metadata_path = "metadata_dataset.csv"  
+metadata_path = "metadata_dataset.csv"
 # Path to the metadata CSV file produced during the graph-generation stage.
 # This file contains all publication- or work-level metadata used in the analysis.
 
@@ -10,11 +10,11 @@ analized_country = "Italy"
 # Country to be analyzed. Only records associated with this country will be considered.
 
 start_year = 1960  # inclusive
-end_year = 2024    # exclusive
+end_year = 2024  # exclusive
 # Time window for the analysis. Only works published within [start_year, end_year) are used.
 
 intervals_years = None
-#intervals_years = [(1960, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2023)]
+# intervals_years = [(1960, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2023)]
 # List of year intervals for aggregating data. Each interval is a pair tuple of (start, end).
 # If None, yearly intervals are used. Only affects CCDF computations.
 
@@ -40,7 +40,7 @@ application_domain_plot_filename = "application_domains_over_time.pdf"
 cs_topics_over_time_plot_filename = "cs_topics_over_time.pdf"
 # Output filename for the plot tracking Computer Science topic trends over time.
 
-ccdf_input_path = "year_by_year/" 
+ccdf_input_path = "year_by_year/"
 # Datasets from which to compute CCDFs will be read.
 ccdf_path = "ccdf/"
 # Directory where CCDF (Complementary Cumulative Distribution Function) plots or data
@@ -52,28 +52,26 @@ ccdf_graph_output_filename = './ccdfs_year_by_year.pdf'
 # ----------------------------------------------------
 # These mappings must be provided manually if analyzing fields outside Computer Science.
 
-from topic_to_category import topic_to_category
-# Dictionary mapping fine-grained CS topics to broader topic categories.
+import json
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+import os
+import pandas as pd
+import seaborn as sns
+from collections import Counter
 
 from mappings import topics_mapping, application_domains_mapping
+from topic_to_category import topic_to_category
+
+# Dictionary mapping fine-grained CS topics to broader topic categories.
 # topics_mapping: Normalizes topic names and groups synonyms/variants.
 # application_domains_mapping: Mapping to unify and filter application-domain labels.
 
-
-import os
-import json
-import networkx as nx
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from collections import Counter
-import seaborn as sns
-
-
 data = {}
 with open(metadata_path, 'r') as f:
-    next(f) #skip header
-    
+    next(f)  # skip header
+
     for line in f:
         parts = line.strip().split(',')
         work_id = parts[0]
@@ -83,7 +81,7 @@ with open(metadata_path, 'r') as f:
         if year not in data:
             data[year] = []
 
-        data[year].append({"id" : parts[0], "author_count" : parts[2], "topics" : parts[3].split(';')})
+        data[year].append({"id": parts[0], "author_count": parts[2], "topics": parts[3].split(';')})
 
 data_sorted = dict(sorted(data.items()))
 
@@ -106,16 +104,16 @@ ax.plot(
 )
 
 for i, (start, end) in enumerate(intervals_years):
-        if i:
-            ax.axvline(
-                x=start,
-                linestyle="--",
-                linewidth=1,
-                alpha=0.35,
-                zorder=0,
-                color="red",
-                label="Interval Separator" if i == 1 else None,
-            )
+    if i:
+        ax.axvline(
+            x=start,
+            linestyle="--",
+            linewidth=1,
+            alpha=0.35,
+            zorder=0,
+            color="red",
+            label="Interval Separator" if i == 1 else None,
+        )
 
 ax.set_xlabel("Year", fontsize=11)
 ax.set_ylabel("Number of Works", fontsize=11)
@@ -144,14 +142,11 @@ ax.legend(
 plt.tight_layout()
 plt.savefig(
     works_per_year_plot_filename,
-    dpi=plots_dpi,
     bbox_inches="tight",
 )
 
 df = pd.DataFrame({"Year": x, "Papers": y})
 df.to_csv(works_per_year_plot_filename.replace(".png", ".csv"), index=False)
-
-
 
 if intervals_years:
 
@@ -165,7 +160,7 @@ if intervals_years:
         markersize=5,
         label='Works per Year',
     )
-  
+
     total_works_per_interval_y = []
     total_works_per_interval_x = []
 
@@ -182,13 +177,13 @@ if intervals_years:
                 color="red",
                 label="Interval Separator" if i == 1 else None,
             )
-        
+
     for start, end in intervals_years:
         total_works_per_interval_x.append(start + (((end + 1) - start) / 2))
-        year_works = [ len(data_sorted[str(year)]) for year in range(start, end+1) ]
-        
+        year_works = [len(data_sorted[str(year)]) for year in range(start, end + 1)]
+
         total_works_per_interval_y.append(sum(year_works))
-        
+
     ax.plot(
         total_works_per_interval_x,
         total_works_per_interval_y,
@@ -227,7 +222,6 @@ if intervals_years:
     plt.tight_layout()
     plt.savefig(
         "interval_" + works_per_year_plot_filename,
-        dpi=plots_dpi,
         bbox_inches="tight",
     )
 
@@ -246,16 +240,19 @@ def get_topics_by_year(data, year):
 
     return topic_counts
 
+
 def normalize_topic_counts(topic_counts):
     total = sum(topic_counts.values())
     normalized_counts = {topic: round((count / total) * 100, 2) for topic, count in topic_counts.items()}
     return normalized_counts
+
 
 def get_application_domains(topics_by_year):
     # sort topics by frequency
     sorted_topics = sorted(topics_by_year.items(), key=lambda item: item[1], reverse=True)
 
     return (sorted_topics[:20])
+
 
 def filter(topics, criteria):
     to_return = topics.copy()
@@ -264,12 +261,13 @@ def filter(topics, criteria):
             del to_return[topic]
     return to_return
 
+
 def marco_filter(topics, criteria):
     to_return = {}
 
     for topic in topics.keys():
         if topic not in criteria:
-            #print(f"Topic '{topic}' not found in criteria mapping. Skipping.")
+            # print(f"Topic '{topic}' not found in criteria mapping. Skipping.")
             continue
 
         if criteria[topic] == "Others":
@@ -288,12 +286,13 @@ def uniform_application_domain(topics, application_domains):
 
     return to_return
 
+
 categories_over_time = {}
 
 years = list(range(start_year, end_year))
 
 for idx, year in enumerate(years):
-    
+
     # here we get all topics by year
     topics = get_topics_by_year(data_sorted, str(year))
     # then we filter out CS topics 
@@ -311,9 +310,8 @@ for idx, year in enumerate(years):
     for topic, percentage in list(sorted_topics.items())[:max_topics]:
         if topic not in categories_over_time:
             categories_over_time[topic] = np.zeros(len(years), dtype=float)
-        
+
         categories_over_time[topic][idx] = percentage
-        
 
 years = list(range(start_year, end_year))
 
@@ -327,16 +325,17 @@ colors = sns.color_palette("muted", len(categories_over_time.items()))
 hatches = ['/', '\\', '|', '-', '+', 'x', 'o', '\\|', '.', '*']
 
 for i, (category, percentage) in enumerate(categories_over_time.items()):
-    plt.bar(years, percentage, width, bottom=bottom, label=category, color=colors[i], edgecolor='white', linewidth=2) #, hatch=hatches[i % len(hatches)]
+    plt.bar(years, percentage, width, bottom=bottom, label=category, color=colors[i], edgecolor='white',
+            linewidth=2)  # , hatch=hatches[i % len(hatches)]
     bottom += np.array(percentage)
 
-plt.xlim(start_year-1, end_year)
+plt.xlim(start_year - 1, end_year)
 
 # ylabel
 plt.ylabel('Percentage of Works (%)', fontweight='bold', fontsize=13)
 plt.title(f"Application Domains Over Time: {analized_country}", fontweight='bold', fontsize=15)
-plt.legend(loc='upper right', bbox_to_anchor=(1.3,1))
-plt.savefig(application_domain_plot_filename, bbox_inches='tight', dpi=plots_dpi)
+plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1))
+plt.savefig(application_domain_plot_filename, bbox_inches='tight')
 
 cs_topics_over_time = {}
 
@@ -354,7 +353,7 @@ for idx, year in enumerate(years):
     filtered_topics = filter(topics, application_domains_mapping)
     marco_filtered_topics = marco_filter(filtered_topics, topic_to_category)
     # we need to uniform the subtopics
-    uniformed_topics = uniform_application_domain(marco_filtered_topics, topic_to_category)#cs_topics
+    uniformed_topics = uniform_application_domain(marco_filtered_topics, topic_to_category)  # cs_topics
     # then we normalize the counts to get percentages
     normalized_topics = normalize_topic_counts(uniformed_topics)
     # we sort the topics by percentage
@@ -376,7 +375,6 @@ cs_df['Total'] = cs_df.sum(axis=1)
 # create a new column 'Other' that is 100 - Total
 cs_df['Other'] = 100 - cs_df['Total']
 
-
 cs_topics_over_time['Other'] = cs_df['Other'].values
 
 years = list(range(start_year, end_year))
@@ -392,19 +390,20 @@ hatches = ['/', '\\', '|', '-', '+', 'x', 'o', '\\|', '.', '*']
 
 for i, (topic, percentage) in enumerate(cs_topics_over_time.items()):
     if topic == "Other":
-        plt.bar(years, percentage, width, bottom=bottom, label=topic, color='lightgrey', edgecolor='white', linewidth=2) #, hatch=hatches[i % len(hatches)]
+        plt.bar(years, percentage, width, bottom=bottom, label=topic, color='lightgrey', edgecolor='white',
+                linewidth=2)  # , hatch=hatches[i % len(hatches)]
     else:
-        plt.bar(years, percentage, width, bottom=bottom, label=topic, color=colors[i], edgecolor='white', linewidth=2) #, hatch=hatches[i % len(hatches)]
+        plt.bar(years, percentage, width, bottom=bottom, label=topic, color=colors[i], edgecolor='white',
+                linewidth=2)  # , hatch=hatches[i % len(hatches)]
     bottom += np.array(percentage)
 
-
-plt.xlim(start_year-1, end_year)
+plt.xlim(start_year - 1, end_year)
 
 # ylabel
 plt.title(f"Disciplines Over Time: {analized_country}", fontweight='bold', fontsize=15)
 plt.ylabel('Percentage of Works (%)', fontweight='bold', fontsize=13)
-plt.legend(loc='upper right', bbox_to_anchor=(1.35,1.), ncol=1)
-plt.savefig(cs_topics_over_time_plot_filename, bbox_inches='tight', dpi=plots_dpi)
+plt.legend(loc='upper right', bbox_to_anchor=(1.35, 1.), ncol=1)
+plt.savefig(cs_topics_over_time_plot_filename, bbox_inches='tight')
 
 
 def eval_ccdf(graph):
@@ -424,11 +423,12 @@ def load_interval_network(input_path, start, end):
         csv_path = os.path.join(input_path, f"{year}.csv")
         if not os.path.exists(csv_path):
             continue
-        df = pd.read_csv(  csv_path, names=['year', 'work_id', 'author_id1', 'author_id2'] )
+        df = pd.read_csv(csv_path, names=['year', 'work_id', 'author_id1', 'author_id2'])
         dfs.append(df)
     if not dfs:
         return None
     return pd.concat(dfs, ignore_index=True)
+
 
 units = intervals_years if intervals_years else [(year, year) for year in range(start_year, end_year)]
 
@@ -451,10 +451,10 @@ for start, end in units:
         print(f"  No data found — skipping")
         continue
 
-    G = nx.from_pandas_edgelist( net_df,  source='author_id1', target='author_id2'  )
+    G = nx.from_pandas_edgelist(net_df, source='author_id1', target='author_id2')
     deg, cs = eval_ccdf(G)
 
-    np.savetxt(output_path, np.column_stack((deg, cs)), delimiter=",",  header="deg,cs",  comments="",  fmt="%d")
+    np.savetxt(output_path, np.column_stack((deg, cs)), delimiter=",", header="deg,cs", comments="", fmt="%d")
 
 n = len(units)
 cols = 5
@@ -519,10 +519,6 @@ fig.suptitle(
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.savefig(
     ccdf_graph_output_filename,
-    dpi=plots_dpi,
     bbox_inches='tight'
 )
 plt.show()
-
-
-

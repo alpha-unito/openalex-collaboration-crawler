@@ -69,11 +69,6 @@ static _configuration parse_cli(int argc, const char **argv) {
         std::exit(1);
     }
 
-    if (concept_id && author_filter) {
-        error_colored("Set both Topic filter and author filter");
-        exit(EXIT_FAILURE);
-    }
-
     auto country_code_filter = country_filter ? args::get(country_filter) : "";
     auto input_dir_string    = input_dir ? args::get(input_dir) + "/data/works" : "";
     auto output_file_name    = output ? args::get(output) : "papers.jsonl";
