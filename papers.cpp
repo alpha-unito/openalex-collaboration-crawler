@@ -78,7 +78,7 @@ static _configuration parse_cli(int argc, const char **argv) {
 
     auto confidence_value = confidence ? args::get(confidence) : 0.5;
 
-    if (!topic_filter.find("https://openalex.org/C")) {
+    if (topic_filter.find("https://openalex.org/C") == std::string::npos) {
         error_colored("Error: not a valid CONCEPT URI!");
         exit(EXIT_FAILURE);
     }
