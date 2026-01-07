@@ -14,7 +14,7 @@ end_year = 2025  # exclusive
 # Time window for the analysis. Only works published within [start_year, end_year) are used.
 
 #intervals_years = None
-intervals_years = [(1960, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2023),(2024, 2024)]
+intervals_years = [(1970, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2024)]
 # List of year intervals for aggregating data. Each interval is a pair tuple of (start, end).
 # If None, yearly intervals are used. Only affects CCDF computations.
 
@@ -37,7 +37,7 @@ application_domain_plot_filename = "application_domains_over_time.pdf"
 cs_topics_over_time_plot_filename = "cs_topics_over_time.pdf"
 # Output filename for the plot tracking Computer Science topic trends over time.
 
-ccdf_input_path = "/beegfs/home/msantima/openalex-collaboration-crawler/build"
+ccdf_input_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT"
 # Datasets from which to compute CCDFs will be read.
 ccdf_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/ccdf"
 # Directory where CCDF (Complementary Cumulative Distribution Function) plots or data

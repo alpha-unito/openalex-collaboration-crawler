@@ -3,3 +3,5 @@ networkx==3.5
 numpy==2.3.4
 pandas==2.3.3
 seaborn==0.13.2
+rustworkx==0.17.1
+alive_progress==3.3.0
