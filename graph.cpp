@@ -165,6 +165,7 @@ int handle_generate_weighted(const std::string &input_file_name) {
                 if (bytes_read % 10000 == 0) {
                     std::lock_guard lock(bar_mtx);
                     total_read_size += bytes_read;
+                    bytes_read = 0;
                 }
 
                 if (uint64_t absolute = start_offset + bytes_read;
@@ -186,6 +187,8 @@ int handle_generate_weighted(const std::string &input_file_name) {
 
                 local_adj[first_key][second_key] += 1;
             }
+            std::lock_guard lock(bar_mtx);
+            total_read_size += bytes_read;
             return 0;
         });
     }
