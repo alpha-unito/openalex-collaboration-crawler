@@ -1,23 +1,3 @@
-# -----------------------------
-# Configuration parameters
-# -----------------------------
-
-# Input directory containing the graph CSV files
-graph_input_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/nets_weighted"
-
-# Output file for structural statistics
-output_stats_file = "./structural_stats.csv"
-
-# Output file for structural statistics of the largest connected component
-output_stats_file_largest_cc = "./largestCC_structural.csv"
-
-# Whether to skip the header row in the CSV files (set false if no header)
-skip = False
-
-# -----------------------------
-# END Configuration parameters
-# -----------------------------
-
 import rustworkx as rwx
 import alive_progress, subprocess, os, sys
 import numpy as np
@@ -69,7 +49,7 @@ def compute_structural_stats(graph, graph_name):
 
     return stats
 
-if __name__ == "__main__":
+def run(graph_input_directory, output_stats_file, output_stats_file_largest_cc, is_bacbone=False):
     
     for path in os.listdir(graph_input_directory):
         if not path.endswith(".csv"):
@@ -88,19 +68,20 @@ if __name__ == "__main__":
         
         with alive_progress.alive_bar(num_lines) as bar:
             with open(graph_path, 'r') as f:
-                for data in f.readlines():
+                
+                if is_bacbone:
+                    next(f)
+                    author_1_col = 0
+                    author_2_col = 1
+                    weight_col = 3
+    
+                else:
+                    author_1_col = 0
+                    author_2_col = 1
+                    weight_col = 2
+                
+                for data in f:
                     bar()
-                    if skip:
-                        cols = data.strip().split(",")
-                        author_1_col = cols.index("source")
-                        author_2_col = cols.index("target")
-                        weight_col = cols.index("weight")
-                        skip = False
-                        continue
-                    else:
-                        author_1_col = 0
-                        author_2_col = 1
-                        weight_col = 2
                     parts   = data.strip().split(",")
                     author1 = parts[author_1_col]
                     author2 = parts[author_2_col]

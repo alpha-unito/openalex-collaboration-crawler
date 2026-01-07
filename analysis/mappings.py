@@ -81,7 +81,11 @@ application_domains_to_delete = [
     "Computer architecture",
     "Disk formatting",
     "Finite-state machine",
-    
+    "Wright",
+    "Bandwidth (computing)",
+    "Citation database",
+    "Thin film",
+    "Diagram",
 ]
 
 application_domains_mapping = {
@@ -263,4 +267,13 @@ application_domains_mapping = {
     "Intersymbol interference" : "Engineering",
     "Equivalent circuit" : "Engineering",
     "Heuristic" : "Mathematics",
+    "Domain (mathematical analysis)" : "Mathematics",
+    "Glycogen phosphorylase" : "Biology",
+    "Ascorbic acid" : "Medicine", 
+    "Politics" : "Political science",
+    "CMOS" : "Engineering",
+    "Algebra over a field" : "Mathematics",
+    "Mass spectrum" : "Chemistry",
+    "Mass spectrometry" : "Chemistry",
+    "Nanotechnology": "Engineering",
 }
