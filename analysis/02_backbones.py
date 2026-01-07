@@ -8,8 +8,8 @@ import os
 
 #CONFIGURATION PARAMETERS
 
-input_networks_path = "./nets_weighted"
-output_networks_path = "./backbones"
+input_networks_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/nets_weighted"
+output_networks_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones/"
 
 
 def generate_bacbone(graph):

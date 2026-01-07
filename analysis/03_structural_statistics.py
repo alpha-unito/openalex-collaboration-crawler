@@ -3,13 +3,16 @@
 # -----------------------------
 
 # Input directory containing the graph CSV files
-graph_input_directory = "./backbones"
+graph_input_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/nets_weighted"
 
 # Output file for structural statistics
 output_stats_file = "./structural_stats.csv"
 
 # Output file for structural statistics of the largest connected component
 output_stats_file_largest_cc = "./largestCC_structural.csv"
+
+# Whether to skip the header row in the CSV files (set false if no header)
+skip = False
 
 # -----------------------------
 # END Configuration parameters
@@ -83,8 +86,6 @@ if __name__ == "__main__":
         
         num_lines = int(subprocess.run("wc -l " + graph_path, shell=True, text=True, capture_output=True).stdout.split(' ')[0])
         
-        skip = True
-        
         with alive_progress.alive_bar(num_lines) as bar:
             with open(graph_path, 'r') as f:
                 for data in f.readlines():
@@ -96,6 +97,10 @@ if __name__ == "__main__":
                         weight_col = cols.index("weight")
                         skip = False
                         continue
+                    else:
+                        author_1_col = 0
+                        author_2_col = 1
+                        weight_col = 2
                     parts   = data.strip().split(",")
                     author1 = parts[author_1_col]
                     author2 = parts[author_2_col]
@@ -113,6 +118,7 @@ if __name__ == "__main__":
 
         print(f"Graph {graph_name} loaded with {len(graph.nodes())} nodes and {len(graph.edges())} edges")
         
+        print(f"Computing statistics for graph {graph_name}")
         # # compute the structural statistics
         stats = compute_structural_stats(graph, graph_name)
         
@@ -126,7 +132,7 @@ if __name__ == "__main__":
             # append the new stats to the existing csv file
             df.to_csv(output_stats_file, mode='a', header=False, index=False)
             
-            
+        print(f"Computing statistics for the largest connected component of graph {graph_name}")
         # get the largest connected component
         largest_cc = list(max(rwx.connected_components(graph), key=len))
         graph = graph.subgraph(largest_cc)
