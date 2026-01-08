@@ -1,70 +1,73 @@
-# -----------------------------
-# Configuration and Input Paths
-# -----------------------------
+import sys, tomllib, os
+import matplotlib.pyplot as plt
+import networkx as nx
+import numpy as np
+import pandas as pd
+from collections import Counter
 
-metadata_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/metadata_dataset.csv"
-# Path to the metadata CSV file produced during the graph-generation stage.
-# This file contains all publication- or work-level metadata used in the analysis.
+toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
 
-analized_country = "Italy"
-# Country to be analyzed. Only records associated with this country will be considered.
+print("Parsing {} configuration file".format(toml_config_path))
+with open(toml_config_path, 'rb') as f:
+    configuration = tomllib.load(f)
 
-start_year = 1960  # inclusive
-end_year = 2025  # exclusive
-# Time window for the analysis. Only works published within [start_year, end_year) are used.
+try:
+    metadata_path                       = configuration["metadata_analisys"]["inputs"]["metadata_path"]
+    ccdf_input_path                     = configuration["metadata_analisys"]["inputs"]["ccdf_input_path"]
+    analized_country                    = configuration["metadata_analisys"]["config"]["analized_country"]
+    works_per_year_plot_filename        = configuration["metadata_analisys"]["outputs"]["works_per_year_plot_filename"]
+    works_per_year_dataset              = configuration["metadata_analisys"]["outputs"]["works_per_year_dataset"]
+    application_domain_plot_filename    = configuration["metadata_analisys"]["outputs"]["application_domain_plot_filename"]
+    cs_topics_over_time_plot_filename   = configuration["metadata_analisys"]["outputs"]["cs_topics_over_time_plot_filename"]
+    ccdf_path                           = configuration["metadata_analisys"]["outputs"]["ccdf_path"]
+    ccdf_graph_output_filename          = configuration["metadata_analisys"]["outputs"]["ccdf_graph_output_filename"]
+    start_year                          = configuration["metadata_analisys"]["config"]["start_year"]
+    end_year                            = configuration["metadata_analisys"]["config"]["end_year"]
+    max_topics                          = configuration["metadata_analisys"]["config"]["max_topics"]
+except KeyError as e:
+    print("Error: key {} not present in configuration file".format(e))
+    exit(-1)
 
-#intervals_years = None
-intervals_years = [(1970, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2024)]
-# List of year intervals for aggregating data. Each interval is a pair tuple of (start, end).
-# If None, yearly intervals are used. Only affects CCDF computations.
+intervals_years = []
+try:
+    for interval in configuration["metadata_analisys"]["config"]["intervals_years"]:
+        intervals_years.append((interval[0], interval[1]))
+except KeyError :
+    intervals_years = None
 
-max_topics = 8
-# Maximum number of topics to consider when aggregating or visualizing topic distributions.
+print(f"\n{'=' * 60}")
+print(f"{ " CONFIGURATION SUMMARY ".center(60, ' ')}")
+print(f"{'=' * 60}")
 
-# ---------------------------------------
-# Output Filenames for Datasets and Plots
-# ---------------------------------------
+print(f"\n[INPUTS]")
+print(f"  Metadata Path:        {metadata_path}")
+print(f"  CCDF Input Path:      {ccdf_input_path}")
 
-works_per_year_plot_filename = "works_per_year.pdf"
-# Output filename for the plot showing the number of works per year.
+print(f"\n[SETTINGS]")
+print(f"  Analyzed Country:     {analized_country}")
+print(f"  Time Window:          {start_year} to {end_year}")
+print(f"  Max Topics:           {max_topics}")
 
-works_per_year_dataset = "works_per_year.csv"
-# Output filename for the CSV dataset containing yearly work counts.
+print(f"\n[OUTPUT FILES]")
+print(f"  Works/Year Plot:      {works_per_year_plot_filename}")
+print(f"  Works/Year Dataset:   {works_per_year_dataset}")
+print(f"  App Domain Plot:      {application_domain_plot_filename}")
+print(f"  CS Topics Plot:       {cs_topics_over_time_plot_filename}")
+print(f"  CCDF Path:            {ccdf_path}")
+print(f"  CCDF Graph Filename:  {ccdf_graph_output_filename}")
 
-application_domain_plot_filename = "application_domains_over_time.pdf"
-# Output filename for the plot tracking application-domain trends over time.
-
-cs_topics_over_time_plot_filename = "cs_topics_over_time.pdf"
-# Output filename for the plot tracking Computer Science topic trends over time.
-
-ccdf_input_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT"
-# Datasets from which to compute CCDFs will be read.
-ccdf_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/ccdf"
-# Directory where CCDF (Complementary Cumulative Distribution Function) plots or data
-# will be stored. This feature is still a work in progress.
-ccdf_graph_output_filename = './ccdfs_year_by_year.pdf'
+print(f"{'=' * 60}\n")
 
 # ----------------------------------------------------
 # External Mappings (Required for Topic Normalization)
 # ----------------------------------------------------
 # These mappings must be provided manually if analyzing fields outside Computer Science.
-
-import json
-import matplotlib.pyplot as plt
-import networkx as nx
-import numpy as np
-import os
-import pandas as pd
-import seaborn as sns
-from collections import Counter
-
-from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete
-from topic_to_category import topic_to_category
-
 # Dictionary mapping fine-grained CS topics to broader topic categories.
 # topics_mapping: Normalizes topic names and groups synonyms/variants.
 # application_domains_mapping: Mapping to unify and filter application-domain labels.
-
+# application_domains_to_delete: list of application domainst that should be removed from the analisys
+from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete
+from topic_to_category import topic_to_category
 
 colors = [
     "#1f77b4",  # blue

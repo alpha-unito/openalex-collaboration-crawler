@@ -1,0 +1,131 @@
+#=====================================#
+#       METADATA ANALISYS STEP        #
+#=====================================#
+[metadata_analisys.inputs]
+
+# Path to the metadata CSV file produced during the graph-generation stage.
+# This file contains all publication- or work-level metadata used in the analysis.
+metadata_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/metadata_dataset.csv"
+
+# Datasets from which to compute CCDFs will be read.
+ccdf_input_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT"
+
+[metadata_analisys.outputs]
+# Output filename for the plot showing the number of works per year.
+works_per_year_plot_filename = "works_per_year.pdf"
+
+# Output filename for the CSV dataset containing yearly work counts.
+works_per_year_dataset = "works_per_year.csv"
+
+# Output filename for the plot tracking application-domain trends over time.
+application_domain_plot_filename = "application_domains_over_time.pdf"
+
+# Output filename for the plot tracking Computer Science topic trends over time.
+cs_topics_over_time_plot_filename = "cs_topics_over_time.pdf"
+
+# Directory where CCDF (Complementary Cumulative Distribution Function) plots or data
+# will be stored. This feature is still a work in progress.
+ccdf_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/ccdf"
+
+# Filename for the metadata plots
+ccdf_graph_output_filename = './ccdfs_year_by_year.pdf'
+
+[metadata_analisys.config]
+# Country to be analyzed. Only records associated with this country will be considered.
+analized_country = "Italy"
+
+# Time window for the analysis. Only works published within [start_year, end_year) are used.
+start_year = 1960  # inclusive
+end_year = 2025  # exclusive
+
+# List of year intervals for aggregating data. Each interval is a pair tuple of (start, end).
+# If None, yearly intervals are used. Only affects CCDF computations.
+intervals_years = [
+    [1970, 1989],
+    [1990, 1999],
+    [2000, 2009],
+    [2010, 2011],
+    [2012, 2014],
+    [2015, 2024]
+]
+
+# Maximum number of topics to consider when aggregating or visualizing topic distributions.
+max_topics = 8
+
+
+#=====================================#
+#      STRUCTURAL STATISTICS STEP     #
+#=====================================#
+[structural_statistics.inputs]
+
+# Input directory containing the weighted graph CSV files
+graph_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/nets_weighted"
+
+[structural_statistics.outputs]
+# Output file for structural statistics
+output_stats_file = "./structural_stats.csv"
+
+# Output file for structural statistics of the largest connected component
+output_stats_file_largest_cc = "./largestCC_structural_stats.csv"
+
+
+#=====================================#
+#           BACKBONES STEP            #
+#=====================================#
+[backbones]
+
+# Weighted networks directory
+inputs.network_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/nets_weighted"
+
+# Directory where to store the computed backbones
+outputs.backbone_directory  = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones/"
+
+
+#=====================================#
+# BACKBONE STRUCTURAL STATISTICS STEP #
+#=====================================#
+[bacbone_structural_statistics.inputs]
+
+# Input directory containing the graph CSV files
+graph_directory ="/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones"
+
+[bacbone_structural_statistics.outputs]
+# Output file for structural statistics
+output_stats_file = "./structural_stats_backbone.csv"
+
+# Output file for structural statistics of the largest connected component
+output_stats_file_largest_cc = "./largestCC_structural_backbone.csv"
+
+#=====================================#
+#      COMMUNITY EXTRACTION STEP      #
+#=====================================#
+[community_extraction]
+
+# Input folder containing the backbone graph CSV files
+inputs.graph_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones"
+
+[community_extraction.outputs]
+# Output folder where computed communities will be stored in pickle format
+communities_folder = "/beegfs/home/msantima/OpenAlexCollaborations/IT/communities"
+
+# Output file for the community statistics
+statistics_output_file = "./communities_statistics.csv"
+
+#=====================================#
+#       COMMUNITY STABILITY STEP      #
+#=====================================#
+[community_stability]
+
+# number of runs for stability evaluation
+RUNS = 10
+
+# Input folder containing the backbone graph CSV files
+inputs.graph_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones"
+
+[community_stability.outputs]
+# Communities output folder. This will be pickles containig all the communities computed during the proces
+communities_output_folder = "/beegfs/home/msantima/OpenAlexCollaborations/IT/stability"
+
+# Output file for the community statistics
+statistics_output_file = "communities_stability_statistics.csv"
+
