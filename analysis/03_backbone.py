@@ -1,16 +1,35 @@
+import os, sys, tomllib
+
+toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
+
+print("Parsing {} configuration file".format(toml_config_path))
+with open(toml_config_path, 'rb') as f:
+    configuration = tomllib.load(f)
+
+try:
+    input_networks_path     = configuration["backbones"]["inputs"]["network_directory"]
+    output_networks_path    = configuration["backbones"]["outputs"]["backbone_directory"]
+except Exception as e:
+    print("Error: key {} not found".format(e))
+    exit(-1)
+
+print(f"\n{'=' * 60}")
+print(f"{" BACKBONE STATISTICS CONFIGURATION ".center(60, ' ')}")
+print(f"{'=' * 60}")
+
+# --- Inputs ---
+print(f"\n[DATA SOURCE]")
+print(f"  Weighted Graph Directory:          {input_networks_path}")
+
+# --- Outputs ---
+print(f"\n[OUTPUTS]")
+print(f"  Bacbones output directory:    {output_networks_path}")
+
 import networkx as nx
 import numpy as np
 import pandas as pd
 import netbone as nb
 from netbone.filters import threshold_filter
-import os
-
-
-#CONFIGURATION PARAMETERS
-
-input_networks_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/nets_weighted"
-output_networks_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones/"
-
 
 def generate_bacbone(graph):
     """

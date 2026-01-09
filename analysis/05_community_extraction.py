@@ -6,23 +6,36 @@ import csv
 from pathlib import Path
 
 
-# -----------------------------
-# Configuration parameters
-# -----------------------------
+import sys, tomllib
 
-# Input folder containing the backbone graph CSV files
-input_graph_folder = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones"
+toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
 
-# Output folder for the extracted communities. If None, it will be set to input folder with "backbones" replaced by "communities"
-output_graph_folder = None
+print("Parsing {} configuration file".format(toml_config_path))
+with open(toml_config_path, 'rb') as f:
+    configuration = tomllib.load(f)
 
-# Output file for the community statistics
-statistics_output_file = "communities_statistics.csv"
+try:
+    input_graph_folder      = configuration["community_extraction"]["inputs"]["graph_directory"]
+    output_graph_folder     = configuration["community_extraction"]["outputs"]["communities_folder"]
+    statistics_output_file  = configuration["community_extraction"]["outputs"]["statistics_output_file"]
+except Exception as e:
+    print("Error: key {} not found".format(e))
+    exit(-1)
 
-# -----------------------------
-# END Configuration parameters
-# -----------------------------
+print(f"\n{'=' * 60}")
+print(f"{" COMMUNITY EXTRACTION CONFIGURATION ".center(60, ' ')}")
+print(f"{'=' * 60}")
 
+# --- Inputs ---
+print(f"\n[DATA SOURCE]")
+print(f"  Graph Directory:        {input_graph_folder}")
+
+# --- Outputs ---
+print(f"\n[COMMUNITY OUTPUTS]")
+print(f"  General Stats File:     {statistics_output_file}")
+print(f"  Community directory:    {output_graph_folder}")
+
+print(f"\n{'='*60}\n")
 
 
 def load_collaboration_graph(path: str) -> nx.Graph:

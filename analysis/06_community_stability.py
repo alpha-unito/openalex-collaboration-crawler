@@ -1,4 +1,3 @@
-
 import networkx as nx
 import numpy as np
 import os
@@ -7,26 +6,41 @@ from pathlib import Path
 import csv
 import datetime
 from sklearn.metrics import adjusted_mutual_info_score, normalized_mutual_info_score
+import sys, tomllib
 
-# -----------------------------
-# Configuration parameters
-# -----------------------------
+toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
 
-# Input folder containing the backbone graph CSV files
-input_graph_folder = "/beegfs/home/msantima/OpenAlexCollaborations/IT/backbones"
+print("Parsing {} configuration file".format(toml_config_path))
+with open(toml_config_path, 'rb') as f:
+    configuration = tomllib.load(f)
 
-# Communities output folder. If None, it will be set to input folder with "backbones" replaced by "stability"
-communities_output_folder = None
+try:
+    input_graph_folder          = configuration["community_stability"]["inputs"]["graph_directory"]
+    communities_output_folder   = configuration["community_stability"]["outputs"]["communities_output_folder"]
+    statistics_output_file      = configuration["community_stability"]["outputs"]["statistics_output_file"]
+    RUNS                        = configuration["community_stability"]["RUNS"]
+except Exception as e:
+    print("Error: key {} not found".format(e))
+    exit(-1)
 
-# Output file for the community statistics
-statistics_output_file = "communities_stability_statistics.csv"
+print(f"\n{'='*60}")
+print(f"{" COMMUNITY STABILITY ".center(60, ' ')}")
+print(f"{'='*60}")
 
-# number of runs for stability evaluation
-RUNS = 10
+# --- Execution Parameters ---
+print(f"\n[EXECUTION]")
+print(f"  Iteration Runs:           {RUNS}")
 
-# -----------------------------
-# END Configuration parameters
-# -----------------------------
+# --- Inputs ---
+print(f"\n[INPUTS]")
+print(f"  Input Graph Folder:       {input_graph_folder}")
+
+# --- Outputs ---
+print(f"\n[OUTPUTS]")
+print(f"  Communities Folder:       {communities_output_folder}")
+print(f"  Statistics File:          {statistics_output_file}")
+
+print(f"\n{'='*60}\n")
 
 
 def load_collaboration_graph(path: str) -> nx.Graph:
