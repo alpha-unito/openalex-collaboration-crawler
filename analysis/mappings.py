@@ -277,3 +277,38 @@ application_domains_mapping = {
     "Mass spectrometry" : "Chemistry",
     "Nanotechnology": "Engineering",
 }
+
+colors = [
+    "#1f77b4",  # blue
+    "#ff7f0e",  # orange
+    "#2ca02c",  # green
+    "#d62728",  # red
+    "#9467bd",  # purple
+    "#8c564b",  # brown
+    "#e377c2",  # pink
+    "#7f7f7f",  # gray
+    "#bcbd22",  # olive
+    "#17becf",  # cyan
+
+    "#393b79",  # dark blue
+    "#637939",  # dark olive
+    "#8c6d31",  # mustard
+    "#843c39",  # dark red
+    "#7b4173",  # plum
+    "#3182bd",  # steel blue
+    "#31a354",  # medium green
+    "#756bb1",  # lavender
+    "#636363",  # dark gray
+    "#e6550d",  # burnt orange
+
+    "#969696",  # light gray
+    "#9c9ede",  # light purple
+    "#cedb9c",  # pale green
+    "#e7ba52",  # yellow
+    "#e7969c",  # light red
+    "#6baed6",  # light blue
+    "#74c476",  # light green
+    "#fd8d3c",  # light orange
+    "#c49c94",  # tan
+    "#bdbdbd",  # silver
+]

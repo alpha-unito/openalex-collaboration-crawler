@@ -7,14 +7,14 @@ with open(toml_config_path, 'rb') as f:
     configuration = tomllib.load(f)
 
 try:
-    input_networks_path     = configuration["backbones"]["inputs"]["network_directory"]
-    output_networks_path    = configuration["backbones"]["outputs"]["backbone_directory"]
+    input_networks_path     = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["backbones"]["inputs"]["graph_directory"]
+    output_networks_path    = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["backbones"]["outputs"]["backbone_directory"]
 except Exception as e:
     print("Error: key {} not found".format(e))
     exit(-1)
 
 print(f"\n{'=' * 60}")
-print(f"{" BACKBONE STATISTICS CONFIGURATION ".center(60, ' ')}")
+print(f"{" BACKBONE CONFIGURATION ".center(60, ' ')}")
 print(f"{'=' * 60}")
 
 # --- Inputs ---

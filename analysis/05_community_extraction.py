@@ -15,9 +15,10 @@ with open(toml_config_path, 'rb') as f:
     configuration = tomllib.load(f)
 
 try:
-    input_graph_folder      = configuration["community_extraction"]["inputs"]["graph_directory"]
-    output_graph_folder     = configuration["community_extraction"]["outputs"]["communities_folder"]
-    statistics_output_file  = configuration["community_extraction"]["outputs"]["statistics_output_file"]
+    input_graph_folder      = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["backbones"]["outputs"]["backbone_directory"]
+    output_graph_folder     = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["community_extraction"]["outputs"]["communities_folder"]
+    statistics_output_file  = configuration["statistics_out_basedir"] + "/" + configuration["community_extraction"]["outputs"]["statistics_output_file"]
+    os.makedirs(configuration["statistics_out_basedir"], exist_ok=True)
 except Exception as e:
     print("Error: key {} not found".format(e))
     exit(-1)

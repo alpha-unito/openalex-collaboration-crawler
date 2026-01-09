@@ -8,41 +8,56 @@ import json
 import alive_progress
 import matplotlib.pyplot as plt
 from functools import reduce 
+import tomllib
+import sys
 
-# -----------------------------
-# Configuration parameters
-# -----------------------------
 
-# Directory containing the community pickle files generated during the stability analysis
-community_pickle_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/stability/"
+toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
+print("Parsing {} configuration file".format(toml_config_path))
+with open(toml_config_path, 'rb') as f:
+    configuration = tomllib.load(f)
 
-size_distribution_statics_output_file = "community_quantile_size_distribution.csv"
+try:
+    display_sink_community          = configuration["community_flow"]["display_sink_community"]
+    size_statistics_path            = configuration["statistics_out_basedir"] + "/" + configuration["community_flow"]["outputs"]["size_statistics_path"]
+    quantiles                       = configuration["community_flow"]["quantiles"]
+    flow_percentile                 = configuration["community_flow"]["flow_percentile"]
+    dataset_metadata_file_path      = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["inputs"]["metadata_path"]
+    graph_paths                     = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["inputs"]["graph_directory"]
+    community_pickle_directory      = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["community_stability"]["outputs"]["communities_output_folder"]
+    comm_labels_out_path            = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["community_extraction"]["outputs"]["communities_folder"]
+except Exception as e:
+    print("Error: key {} not found".format(e))
+    exit(-1)
 
-# Community quantiles to compute
-quantiles = [25, 50, 60, 70, 80, 90, 95, 99]
-
-flow_percentile = 99
-
-# Output directory for the community labels
-community_labels_output_directory = "/beegfs/home/msantima/OpenAlexCollaborations/IT/communities"\
+community_time_intervals = []
+try:
+    for interval in configuration["time_intervals"]:
+        community_time_intervals.append((interval[0], interval[1]))
+except KeyError :
+    exit(-1)
     
+print(f"\n{'=' * 60}")
+print(f"{' COMMUNITY FLOW CONFIGURATION SUMMARY '.center(60, ' ')}")
+print(f"{'=' * 60}")
+
+print(f"\n[INPUTS]")
+print(f"  Dataset Metadata:     {dataset_metadata_file_path}")
+print(f"  Graphs Directory:     {graph_paths}")
+print(f"  Communities Pickle:   {community_pickle_directory}")
+
+print(f"\n[SETTINGS]")
+print(f"  Display Sink Comm.:   {display_sink_community}")
+print(f"  Flow Percentile:      {flow_percentile}")
+print(f"  Quantiles:            {quantiles}")
+
+print(f"\n[OUTPUT FILES]")
+print(f"  Size Statistics Path: {size_statistics_path}")
+print(f"  Community Labels Out: {comm_labels_out_path}")
+
+print(f"{'=' * 60}\n")
+
     
-# Location of oiginal graphs, as returned by the papers extraction process (not the backbones nor the weighted versions)
-graph_paths = "/beegfs/home/msantima/OpenAlexCollaborations/IT/"
-
-# Input folder containing the backbone graph CSV files
-dataset_metadata_file_path = "/beegfs/home/msantima/OpenAlexCollaborations/IT/metadata_dataset.csv"
-
-# Time intervals for which to compute the community labels, as used in the graph generation phase
-community_time_intervals = [("*", 1969),(1970, 1989), (1990, 1999), (2000, 2009), (2010, 2011), (2012, 2014), (2015, 2024), (2025, "*")]
-#community_time_intervals = [("*", 1969),(1970, 1989), (1990, 1999)]
-
-display_sink_community = True
-
-# -----------------------------
-# END Configuration parameters
-# -----------------------------
-
 
 def load_works(start_year, end_year, graph_paths):
     works = dict()
@@ -175,7 +190,7 @@ def find_overlap(comm1, comm2, normalized=False):
 
 if __name__ == "__main__":
     communities = load_communities(community_pickle_directory)
-    community_size_distribution(communities, quantiles, size_distribution_statics_output_file)
+    community_size_distribution(communities, quantiles, size_statistics_path)
     
     flow_communities = dict()
     
@@ -191,7 +206,7 @@ if __name__ == "__main__":
                 communities_works[community_id] = match_community_works_to_topics(works, dataset_metadata_file_path)
                 bar()
             
-        output_file = f"{community_labels_output_directory}/topic_distribution_{start_year}_{end_year}.json".replace("*", "")
+        output_file = f"{comm_labels_out_path}/topic_distribution_{start_year}_{end_year}.json".replace("*", "")
         json.dump(communities_works, open(output_file, "w"))
         print(f"Community labels dumped to: {output_file}\n")
 
@@ -311,7 +326,7 @@ if __name__ == "__main__":
             for j in range(n_cols):
                 val = round(migration_matrices[year_during][i, j] * 100, 2)
                 ax.text(
-                    j, i, val,
+                    j, i, f"{val}%",
                     ha="center",
                     va="center",
                     fontsize=font_size,

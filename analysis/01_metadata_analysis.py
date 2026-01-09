@@ -12,31 +12,35 @@ with open(toml_config_path, 'rb') as f:
     configuration = tomllib.load(f)
 
 try:
-    metadata_path                       = configuration["metadata_analisys"]["inputs"]["metadata_path"]
-    ccdf_input_path                     = configuration["metadata_analisys"]["inputs"]["ccdf_input_path"]
-    analized_country                    = configuration["metadata_analisys"]["config"]["analized_country"]
-    works_per_year_plot_filename        = configuration["metadata_analisys"]["outputs"]["works_per_year_plot_filename"]
-    works_per_year_dataset              = configuration["metadata_analisys"]["outputs"]["works_per_year_dataset"]
-    application_domain_plot_filename    = configuration["metadata_analisys"]["outputs"]["application_domain_plot_filename"]
-    cs_topics_over_time_plot_filename   = configuration["metadata_analisys"]["outputs"]["cs_topics_over_time_plot_filename"]
-    ccdf_path                           = configuration["metadata_analisys"]["outputs"]["ccdf_path"]
-    ccdf_graph_output_filename          = configuration["metadata_analisys"]["outputs"]["ccdf_graph_output_filename"]
+    metadata_path                       = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["inputs"]["metadata_path"]
+    ccdf_input_path                     = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["inputs"]["graph_directory"]
+    ccdf_path                           = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["outputs"]["ccdf_path"]
+    
+    works_per_year_plot_filename        = configuration["statistics_out_basedir"] + "/" + "intervals_" + configuration["metadata_analisys"]["outputs"]["works_per_year_plot_filename"]
+    works_per_year_dataset              = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["works_per_year_dataset"]
+    application_domain_plot_filename    = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["application_domain_plot_filename"]
+    cs_topics_over_time_plot_filename   = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["cs_topics_over_time_plot_filename"]
+    ccdf_graph_output_filename          = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["ccdf_graph_output_filename"]
+    
+    analized_country                    = configuration["analized_country_full"]
     start_year                          = configuration["metadata_analisys"]["config"]["start_year"]
     end_year                            = configuration["metadata_analisys"]["config"]["end_year"]
     max_topics                          = configuration["metadata_analisys"]["config"]["max_topics"]
+    
+    os.makedirs(configuration["statistics_out_basedir"], exist_ok=True)
 except KeyError as e:
     print("Error: key {} not present in configuration file".format(e))
     exit(-1)
 
 intervals_years = []
 try:
-    for interval in configuration["metadata_analisys"]["config"]["intervals_years"]:
+    for interval in configuration["time_intervals"]:
         intervals_years.append((interval[0], interval[1]))
 except KeyError :
     intervals_years = None
 
 print(f"\n{'=' * 60}")
-print(f"{ " CONFIGURATION SUMMARY ".center(60, ' ')}")
+print(f"{ " METADATA ANALISYS CONFIGURATION ".center(60, ' ')}")
 print(f"{'=' * 60}")
 
 print(f"\n[INPUTS]")
@@ -66,43 +70,8 @@ print(f"{'=' * 60}\n")
 # topics_mapping: Normalizes topic names and groups synonyms/variants.
 # application_domains_mapping: Mapping to unify and filter application-domain labels.
 # application_domains_to_delete: list of application domainst that should be removed from the analisys
-from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete
+from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete, colors
 from topic_to_category import topic_to_category
-
-colors = [
-    "#1f77b4",  # blue
-    "#ff7f0e",  # orange
-    "#2ca02c",  # green
-    "#d62728",  # red
-    "#9467bd",  # purple
-    "#8c564b",  # brown
-    "#e377c2",  # pink
-    "#7f7f7f",  # gray
-    "#bcbd22",  # olive
-    "#17becf",  # cyan
-
-    "#393b79",  # dark blue
-    "#637939",  # dark olive
-    "#8c6d31",  # mustard
-    "#843c39",  # dark red
-    "#7b4173",  # plum
-    "#3182bd",  # steel blue
-    "#31a354",  # medium green
-    "#756bb1",  # lavender
-    "#636363",  # dark gray
-    "#e6550d",  # burnt orange
-
-    "#969696",  # light gray
-    "#9c9ede",  # light purple
-    "#cedb9c",  # pale green
-    "#e7ba52",  # yellow
-    "#e7969c",  # light red
-    "#6baed6",  # light blue
-    "#74c476",  # light green
-    "#fd8d3c",  # light orange
-    "#c49c94",  # tan
-    "#bdbdbd",  # silver
-]
 
 data = {}
 with open(metadata_path, 'r') as f:
@@ -253,7 +222,7 @@ if intervals_years:
     )
 
     plt.tight_layout()
-    plt.savefig( f"intervals_{works_per_year_plot_filename}", bbox_inches="tight", )
+    plt.savefig( f"{works_per_year_plot_filename}", bbox_inches="tight", )
 
 
 def get_topics_by_year(data, year):

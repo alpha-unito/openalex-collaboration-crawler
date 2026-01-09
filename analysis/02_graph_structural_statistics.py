@@ -1,5 +1,4 @@
-
-import sys, tomllib
+import sys, tomllib, os
 
 toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
 
@@ -8,9 +7,10 @@ with open(toml_config_path, 'rb') as f:
     configuration = tomllib.load(f)
 
 try:
-    graph_directory                 = configuration["structural_statistics"]["inputs"]["graph_directory"]
-    output_stats_file               = configuration["structural_statistics"]["outputs"]["output_stats_file"]
-    output_stats_file_largest_cc    = configuration["structural_statistics"]["outputs"]["output_stats_file_largest_cc"]
+    graph_directory                 = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["backbones"]["inputs"]["graph_directory"]
+    output_stats_file               = configuration["statistics_out_basedir"] + "/" + configuration["structural_statistics"]["outputs"]["output_stats_file"]
+    output_stats_file_largest_cc    = configuration["statistics_out_basedir"] + "/" + configuration["structural_statistics"]["outputs"]["output_stats_file_largest_cc"]
+    os.makedirs(configuration["statistics_out_basedir"], exist_ok=True)
 except Exception as e:
     print("Error: key {} not found".format(e))
     exit(-1)
