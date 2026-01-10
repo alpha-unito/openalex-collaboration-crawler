@@ -73,6 +73,11 @@ print(f"{'=' * 60}\n")
 from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete, colors
 from topic_to_category import topic_to_category
 
+def normalize_ascii(text):
+    if isinstance(text, bytes):
+        text = text.decode("utf-8", "ignore")
+    return text.encode("ascii", "ignore").decode("ascii")
+
 data = {}
 with open(metadata_path, 'r') as f:
     next(f)  # skip header
@@ -230,10 +235,15 @@ def get_topics_by_year(data, year):
         return None
     
     topics = [
-        t
+        normalize_ascii(
+            t[t.find("(") + 1 : t.find(")")].capitalize()
+            if "(" in t and ")" in t
+            else t
+        )
         for work in data[year]
-        for t in work['topics']
-    ]
+        for t in work["topics"]
+    ]   
+
     topic_counts = Counter(topics)
 
     # remove 'Computer science'
@@ -284,6 +294,7 @@ def uniform_application_domain(topics, application_domains):
     to_return = {}
 
     for topic, freq in topics.items():
+        topic = normalize_ascii(topic)
         new_key = application_domains[topic] if topic in application_domains else topic
         to_return[new_key] = to_return.get(new_key, 0) + freq
 
@@ -340,6 +351,8 @@ plt.ylabel('Percentage of Works (%)', fontweight='bold', fontsize=13)
 plt.title(f"Application Domains Over Time: {analized_country}", fontweight='bold', fontsize=15)
 plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1))
 plt.savefig(application_domain_plot_filename, bbox_inches='tight')
+
+print("Saved plot for application domains over time")
 
 cs_topics_over_time = {}
 
@@ -411,6 +424,7 @@ plt.ylabel('Percentage of Works (%)', fontweight='bold', fontsize=13)
 plt.legend(loc='upper right', bbox_to_anchor=(1.35, 1.), ncol=1)
 plt.savefig(cs_topics_over_time_plot_filename, bbox_inches='tight')
 
+print("Saved plot for computer science topics over time")
 
 def eval_ccdf(graph):
     degree_sequence = sorted(
