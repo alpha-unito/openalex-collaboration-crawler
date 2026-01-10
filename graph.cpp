@@ -338,6 +338,7 @@ int main(int argc, const char **argv) {
            << file_name << "]";
         info_colored(ss.str());
     }
+    info_colored("Topic confidence score: " + std::to_string(concepts_confidence_score));
 
     // get file size
     uint64_t file_size = 0;
