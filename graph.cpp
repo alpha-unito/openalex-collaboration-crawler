@@ -33,6 +33,7 @@ struct ArgsParsed {
     std::optional<std::string> output;
     std::optional<std::string> split;
     std::optional<std::string> extract_weighted;
+    double concepts_confidence_score = 0;
 };
 
 static ArgsParsed parse_cli(int argc, const char **argv) {
@@ -54,6 +55,13 @@ static ArgsParsed parse_cli(int argc, const char **argv) {
                                        "Split a dataset into single years datasets. This will "
                                        "remove the year field in the dataset.",
                                        {"split"});
+
+    args::ValueFlag<double> conf_score(
+        parser, "VALUE",
+        "Confidence score used while extracting a paper topics. Only topics with a score greater "
+        "or equal to the provided score will be kept. Accepted value between 0 and 1. Defaults to "
+        "0.",
+        {"confidence"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -81,12 +89,27 @@ static ArgsParsed parse_cli(int argc, const char **argv) {
     if (split) {
         parameters.split = args::get(split);
     }
+
+    if (conf_score) {
+        if (const auto tmp = args::get(conf_score); tmp < 0 || tmp > 1) {
+            warn_colored("Warning: confidence score is out of bonds. Using 0 instead");
+        } else {
+            parameters.concepts_confidence_score = tmp;
+        }
+    }
+
     return parameters;
 }
 
-static std::vector<std::string> extract_topics(simdjson::ondemand::array concepts) {
+static std::vector<std::string> extract_topics(simdjson::ondemand::array concepts,
+                                               const double confidence_score) {
     std::vector<std::string> out;
     for (simdjson::ondemand::value v : concepts) {
+
+        // skip concepts with score lower than the confidence score threshold
+        if (v["score"].get_double() < confidence_score) {
+            continue;
+        }
 
         std::string_view sv;
         if (!v["display_name"].get(sv) && !sv.empty()) {
@@ -236,7 +259,8 @@ int handle_generate_weighted(const std::string &input_file_name) {
 int main(int argc, const char **argv) {
     const std::string openalex_default_prefix = "https://openalex.org/";
 
-    auto [format, input, output, split, extract_weighted] = parse_cli(argc, argv);
+    auto [format, input, output, split, extract_weighted, concepts_confidence_score] =
+        parse_cli(argc, argv);
 
     const std::string input_file       = input.value_or("papers-filtered.jsonl");
     const std::string output_file_base = output.value_or("dataset.csv");
@@ -416,7 +440,8 @@ int main(int argc, const char **argv) {
                 } catch (...) {
                     continue;
                 }
-                std::vector<std::string> topics = extract_topics(concepts_arr);
+                std::vector<std::string> topics =
+                    extract_topics(concepts_arr, concepts_confidence_score);
                 std::string topic_list;
                 if (!topics.empty()) {
                     std::ostringstream oss;
