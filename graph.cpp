@@ -331,8 +331,8 @@ int main(int argc, const char **argv) {
     info_colored("Will generate the following temporal adjacency lists:");
     for (size_t i = 0; i < intervals.size(); ++i) {
         const auto &[start, end, file_name] = intervals[i];
-        std::string start_s                 = (start == 0 ? "START" : std::to_string(start));
-        std::string end_s                   = (end == UINT64_MAX ? "END" : std::to_string(end));
+        std::string start_s                 = (start == 0 ? "START" : std::to_string(start) + " ");
+        std::string end_s                   = (end == UINT64_MAX ? "END  " : std::to_string(end));
         std::ostringstream ss;
         ss << "\t interval " << i << " -> from " << start_s << " to " << end_s << " -> ["
            << file_name << "]";
