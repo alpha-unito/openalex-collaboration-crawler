@@ -18,6 +18,7 @@ with open(toml_config_path, 'rb') as f:
     configuration = tomllib.load(f)
 
 try:
+    statistics_out_basedir          = configuration["statistics_out_basedir"]
     display_sink_community          = configuration["community_flow"]["display_sink_community"]
     size_statistics_path            = configuration["statistics_out_basedir"] + "/" + configuration["community_flow"]["outputs"]["size_statistics_path"]
     quantiles                       = configuration["community_flow"]["quantiles"]
@@ -344,7 +345,7 @@ if __name__ == "__main__":
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
         # Save
-        out = f"community_migration_{year_before}_to_{year_during}.pdf"
+        out = f"{statistics_out_basedir}/community_migration_{year_before}_to_{year_during}.pdf"
         plt.savefig(out, bbox_inches="tight")
         plt.close()
 

@@ -71,21 +71,14 @@ def run(graph_input_directory, output_stats_file, output_stats_file_largest_cc, 
                 
                 if is_bacbone:
                     next(f)
-                    author_1_col = 0
-                    author_2_col = 1
-                    weight_col = 3
-    
-                else:
-                    author_1_col = 0
-                    author_2_col = 1
-                    weight_col = 2
+           
                 
                 for data in f:
                     bar()
                     parts   = data.strip().split(",")
-                    author1 = parts[author_1_col]
-                    author2 = parts[author_2_col]
-                    weight  = parts[weight_col]
+                    author1 = parts[0]
+                    author2 = parts[1]
+                    weight  = parts[2]
             
                     # add the nodes to the graph
                     if author1 not in node_map:
