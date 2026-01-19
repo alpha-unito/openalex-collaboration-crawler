@@ -20,6 +20,7 @@ try:
     
     bacbone_stats_file_full = base_dir / cfg["bacbone_structural_statistics"]["outputs"]["output_stats_file"]
     bacbone_stats_file_cc = base_dir / cfg["bacbone_structural_statistics"]["outputs"]["output_stats_file_largest_cc"]
+    bacbone_stats_file_validation = base_dir / cfg["graph_property_validation"]["outputs"]["stats_out"]
 
     output_plot = base_dir / cfg["plot_generation"]["outputs"]["structural_step_plot_filename"]
     bacbone_output_plot = base_dir / cfg["plot_generation"]["outputs"]["backbone_structural_step_plot_filename"]
@@ -138,6 +139,7 @@ print(f"Saved plot to {output_plot}")
 
 df_full = prepare_df(bacbone_stats_file_full)
 df_cc = prepare_df(bacbone_stats_file_cc)
+df_validation = prepare_df(bacbone_stats_file_validation)
 
 # Ensure alignment
 if not df_full["label"].equals(df_cc["label"]):
@@ -151,11 +153,13 @@ axes = axes.flatten()
 
 style_full = dict(marker="o", linestyle="-", label="Full network")
 style_cc = dict(marker="s", linestyle="--", label="Largest CC")
+style_val = dict(marker="x", linestyle=":", label="Validation full")
 
 
 # ---- 1: Nodes vs Edges (scatter) ----
 axes[0].scatter(df_full["number_of_nodes"], df_full["number_of_edges"], label="Full")
 axes[0].scatter(df_cc["number_of_nodes"], df_cc["number_of_edges"], label="Largest CC")
+axes[0].scatter(df_validation["number_of_nodes"], df_validation["number_of_edges"], label="Validation - full")
 
 for i in range(len(df_full)):
     axes[0].annotate(
@@ -179,6 +183,7 @@ axes[0].legend()
 def line(ax, col, ylabel=None, logy=False):
     ax.plot(labels, df_full[col], **style_full)
     ax.plot(labels, df_cc[col], **style_cc)
+    ax.plot(labels, df_validation[col], **style_val)
     ax.set_title(col.replace("_", " ").title())
     if ylabel:
         ax.set_ylabel(ylabel)
@@ -201,6 +206,7 @@ line(axes[7], "w_max_degree", "Weighted degree")
 # ---- 9: Number of nodes ----
 axes[8].plot(labels, df_full["number_of_nodes"], **style_full)
 axes[8].plot(labels, df_cc["number_of_nodes"], **style_cc)
+axes[8].plot(labels, df_validation["number_of_nodes"], **style_val)
 axes[8].set_yscale("log")
 axes[8].set_title("Number of Nodes")
 axes[8].set_ylabel("Nodes")

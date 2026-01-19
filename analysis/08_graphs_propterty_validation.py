@@ -8,9 +8,8 @@ from pathlib import Path
 import networkx as nx
 import rustworkx as rx
 import alive_progress
+import random
 from compute_structural_statistics import compute_structural_stats
-
-tmp_path = "/tmp/synthetic_graph.edgelist"
 
 toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
 print(f"Parsing {toml_config_path} configuration file")
@@ -24,7 +23,9 @@ try:
     base_dir = Path(cfg["statistics_out_basedir"])
 
     bacbones_path = cfg["workflow_data"] + "/" + cfg["country"] + "/" + cfg["backbones"]["outputs"]["backbone_directory"]
+    full_path = cfg["workflow_data"] + "/" + cfg["country"] + "/" + cfg["backbones"]["inputs"]["graph_directory"]
     
+    output_stats_filename_backbone = cfg["statistics_out_basedir"] + "/" + cfg["graph_property_validation"]["outputs"]["stats_out_backbone"]
     output_stats_filename = cfg["statistics_out_basedir"] + "/" + cfg["graph_property_validation"]["outputs"]["stats_out"]
     iterations = cfg["graph_property_validation"]["iterations"]
 
@@ -38,7 +39,10 @@ def load_collaboration_graph(path: str) -> nx.Graph:
     with open (path, 'r') as f:
         next(f)
         for line in f:
-            source, target, weight, _ = line.strip().split(',')
+            parts  = line.strip().split(',')
+            source = parts[0]
+            target = parts[1]
+            weight = parts[2]
             collab_graph.add_edge(source, target, weight=float(weight))
     print("\tGraph has: ", collab_graph.number_of_nodes(), " nodes and ", collab_graph.number_of_edges(), " edges")
     return collab_graph
@@ -58,7 +62,7 @@ for bacbone_name in os.listdir(bacbones_path):
         for i in range(iterations):
             grx = rx.PyGraph()
     
-            g = nx.expected_degree_graph(degree_sequence, seed=42 + i)
+            g = nx.expected_degree_graph(degree_sequence, seed=random.randint(0, 1000000))
             
         
             nodemap = {node: grx.add_node(node) for node in g.nodes()}
@@ -75,6 +79,51 @@ for bacbone_name in os.listdir(bacbones_path):
     results_df = pd.DataFrame(all_stats)
     average_stats = results_df.mean(numeric_only=True).to_frame().T
     average_stats["graph_name"] = bacbone_name
+    cols = ["graph_name"] + [c for c in average_stats.columns if c != "graph_name"]
+    average_stats = average_stats[cols]
+            
+    if not os.path.exists(output_stats_filename_backbone):
+        average_stats.to_csv(output_stats_filename_backbone, index=False)
+    else:
+        average_stats.to_csv(output_stats_filename_backbone, mode='a', header=False, index=False)
+    
+
+    
+print(f"Stored stats to {output_stats_filename_backbone}")
+
+
+
+for path in os.listdir(full_path):
+    print(f"Analizing backbone {path}")
+    
+    graph_path = full_path + "/" + path
+    graph = load_collaboration_graph(graph_path)
+    degree_sequence = [d for _,d in graph.degree()]
+    
+    print(f"Executing analisis on {path} with {iterations} iterations")
+    all_stats = []
+
+    with alive_progress.alive_bar(iterations, title="path_name") as bar:
+        for i in range(iterations):
+            grx = rx.PyGraph()
+    
+            g = nx.expected_degree_graph(degree_sequence, seed=random.randint(0, 1000000))
+            
+        
+            nodemap = {node: grx.add_node(node) for node in g.nodes()}
+            
+            for u, v in g.edges():
+                grx.add_edge(nodemap[u], nodemap[v], 1)
+            
+            stats = compute_structural_stats(graph=grx, graph_name=f"{path}.{i}")
+            all_stats.append(stats)
+            
+            bar()
+
+    # 3. Create a single DataFrame from the list and compute the mean
+    results_df = pd.DataFrame(all_stats)
+    average_stats = results_df.mean(numeric_only=True).to_frame().T
+    average_stats["graph_name"] = path
     cols = ["graph_name"] + [c for c in average_stats.columns if c != "graph_name"]
     average_stats = average_stats[cols]
             

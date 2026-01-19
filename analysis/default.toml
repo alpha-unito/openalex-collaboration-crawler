@@ -150,3 +150,4 @@ backbone_structural_step_plot_filename = "backbone_structural_stats.pdf"
 [graph_property_validation]
 iterations = 10
 outputs.stats_out = "graph_property_validation.csv"
+outputs.stats_out_backbone = "graph_property_validation_backbone.csv"
