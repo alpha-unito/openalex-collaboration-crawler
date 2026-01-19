@@ -24,6 +24,9 @@ topics_mapping = {
 }
 
 application_domains_to_delete = [
+    "Commonsense reasoning",
+    "Commonsense knowledge",
+    "Automated theorem proving",
     "internet",
     "The Internet",
     "Fuzzy logic",
@@ -153,7 +156,10 @@ application_domains_to_delete = [
     "Genetic algorithm",
     "Computer programming",
     "Evidence",
-    "Exchange"
+    "Exchange",
+    "Graphical",
+    "Existential",
+    "Subroutine",
 ]
 
 application_domains_mapping = {
@@ -180,6 +186,8 @@ application_domains_mapping = {
     "Automation" : "Economics",
     "Parametric statistics" : "Mathematics",
     "Code (set theory)" : "Mathematics",
+    "Set theory" : "Mathematics",
+    "Matter" : 'Physics',
     "Mathematical proof" : "Mathematics",
     "Variable (mathematics)" : "Mathematics", 
     "Basis (linear algebra)" : "Mathematics",
@@ -347,6 +355,7 @@ application_domains_mapping = {
     "Matrix (chemical analysis)" : "Chemistry",
     "Control system" : "Engineering",
     "Realization (probability)" : "Mathematics",
+    "Probability" : "Mathematics",
     "Class (philosophy)" : "Philosophy",
     "Arithmetic" : "Mathematics",
     "Random variable" : "Mathematics",

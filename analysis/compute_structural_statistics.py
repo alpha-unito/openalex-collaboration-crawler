@@ -20,12 +20,17 @@ def compute_structural_stats(graph, graph_name):
     degree_std = np.std(degree_sequence)
 
     #weighted degree distribution
-    weighted_degree_sequence = sorted([ sum([v for(k,v) in graph.adj(n).items()]) for n in graph.node_indices()], reverse=True)
+    weighted_degree_sequence = sorted([sum([v if type(v) is int else v["weight"] for(k,v) in graph.adj(n).items()]) for n in graph.node_indices()], reverse=True)
     w_min_degree = min(weighted_degree_sequence)
     w_max_degree = max(weighted_degree_sequence)
     w_mean_degree = np.mean(weighted_degree_sequence)
     w_median_degree = np.median(weighted_degree_sequence)
     w_degree_std = np.std(weighted_degree_sequence)
+    
+    try:
+        density = len(graph.edges()) / (len(graph.nodes()) * (len(graph.nodes()) - 1) / 2)
+    except:
+        density = -1
 
 
     stats = {
@@ -42,7 +47,7 @@ def compute_structural_stats(graph, graph_name):
         'w_mean_degree': w_mean_degree,
         'w_median_degree': w_median_degree,
         'w_degree_std': w_degree_std,
-        'density': len(graph.edges()) / (len(graph.nodes()) * (len(graph.nodes()) - 1) / 2),
+        'density': density ,
         'transitivity': rwx.transitivity(graph),
         'n_connected_components': rwx.number_connected_components(graph)
     }
@@ -123,8 +128,3 @@ def run(graph_input_directory, output_stats_file, output_stats_file_largest_cc, 
         else:
             # append the new stats to the existing csv file
             df.to_csv(output_stats_file_largest_cc, mode='a', header=False, index=False)
-
-    
-
-
-

@@ -24528,7 +24528,7 @@ topic_to_category = {
     "Hyperlink": "Others",
     "Hyperlipidemia": "Others",
     "Hypermarket": "Others",
-    "Hypermedia": " Hypermedia",
+    "Hypermedia": "Hypermedia",
     "Hypermetabolism": "Others",
     "Hypermetropia": "Others",
     "Hypermobility (travel)": "Others",

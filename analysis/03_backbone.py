@@ -30,6 +30,9 @@ import numpy as np
 import pandas as pd
 import netbone as nb
 from netbone.filters import threshold_filter
+from pathlib import Path
+
+Path(output_networks_path).mkdir(parents=True, exist_ok=True)
 
 def generate_bacbone(graph):
     """

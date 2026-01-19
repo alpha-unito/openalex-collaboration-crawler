@@ -5,11 +5,11 @@
 # for input and output graph data (and not for plots or statistics)
 workflow_data = "/beegfs/home/msantima/OpenAlexCollaborations/"
 # Country code for the analized country
-country = "IT"
+country = "UK"
 # Country to be analyzed. Only records associated with this country will be considered.
-analized_country_full = "Italy"
+analized_country_full = "United Kingdom"
 # Base directory where all statistics will be stored
-statistics_out_basedir = "/beegfs/home/msantima/openalex-collaboration-crawler/analysis/statistics-it"
+statistics_out_basedir = "/beegfs/home/msantima/openalex-collaboration-crawler/analysis/statistics-uk"
 
 # List of year intervals for aggregating data. Each interval is a pair tuple of (start, end).
 # If None, yearly intervals are used. Only affects CCDF computations.
@@ -135,6 +135,7 @@ flow_percentile = 99
 outputs.size_statistics_path = "community_quantile_size_distribution.csv"
 
 
+
 #=====================================#
 #         PLOT GENERATION STEP        #
 #=====================================#
@@ -142,6 +143,7 @@ outputs.size_statistics_path = "community_quantile_size_distribution.csv"
 [plot_generation.outputs]
 structural_step_plot_filename = "structural_stats.pdf"
 backbone_structural_step_plot_filename = "backbone_structural_stats.pdf"
+
 
 #=====================================#
 #     Graph property validation       #
