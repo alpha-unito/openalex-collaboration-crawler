@@ -4,8 +4,38 @@ import tomllib
 import sys, os
 import json
 import numpy as np
-import copy
 from pathlib import Path
+
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+def extract_common_thread(topics):
+    
+    if len(topics) == 0:
+        return ""
+    
+    # 1. Load a pre-trained model that understands CS/Technical language
+    # 'all-MiniLM-L6-v2' is fast and very accurate for short phrases
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+
+    # 2. Encode the topics into semantic vectors (embeddings)
+    embeddings = model.encode(topics)
+
+    # 3. Calculate the "Centroid" (The mathematical average of all topics)
+    centroid = np.mean(embeddings, axis=0).reshape(1, -1)
+
+    # 4. Find which original topics are closest to the "Mean" of the group
+    similarities = cosine_similarity(embeddings, centroid)
+    
+    # 5. Rank topics by how well they represent the group
+    ranked_indices = np.argsort(similarities.flatten())[::-1]
+    
+    if len(ranked_indices) > 1:
+        return "(" + topics[ranked_indices[0]] + ": " + topics[ranked_indices[1]] + ")"
+    
+    return "(" + topics[ranked_indices[0]] + ")"
+
 
 
 toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
@@ -53,6 +83,8 @@ topic_map = {topic: idx for idx, topic in enumerate(topics)}
 # ---------------------------
 # Second pass: build signals
 # ---------------------------
+
+
 for file in communities_folder.iterdir():
     if file.suffix != ".json":
         continue
@@ -87,8 +119,6 @@ for file in communities_folder.iterdir():
         for i in range(len(topics))
     ]
     
-    signals_old = copy.deepcopy(signals)
-    
     # subtract baseline
     if len(signals) > 1:
         for i in range(len(signals)):
@@ -104,28 +134,32 @@ for file in communities_folder.iterdir():
     print(f"Plotting {len(signals)} signals for community: {file.name}")
     fig, ax = plt.subplots(1, 1, figsize=(20, 10))
 
-    #ax[0].set_title(f"Original: {file.stem}")
-    #ax[1].set_title(f"Cleaned: {file.stem}")
     ax.set_title(file.stem)
     
     signal_best_candidate = []
 
-    # Plot on ax[0] and collect labels
-    for i, signal in enumerate(signals_old):
-        best_label = topics[signal.index(max(signal))]
-        signal_best_candidate.append(f"{i}: {best_label}")
-        #ax[0].plot(range(len(signal)), signal, label=best_label)
-        ax.plot(signal, label=f"{i}: {best_label}")
+    for i, signal in enumerate(signals):
         
-    # Plot on ax[1] (optional: same labels if you want)
-    #for signal in signals:
-    #    ax[1].plot(signal)
-
-    #ax[0].grid()
-    #ax[1].grid()
+        signal_level_treshold = max(signal)
+        general_topic = topics[signal.index(max(signal))]
+        
+        signal_level_treshold -= signal_level_treshold / 100 * 5 # lower by 5% the treshold to allow more information
+        
+        keywords = [topics[index] for index, count in enumerate(signal) if count >= signal_level_treshold ]
+        
+        keywords.remove(general_topic)
+        
+        keyword = extract_common_thread(keywords)
+        
+        label = f"{i}: {general_topic}{keyword}"
+        
+        signal_best_candidate.append(label)
+        
+        ax.plot(signal, label=label)
+        
     ax.grid()
 
-    fig.legend(bbox_to_anchor=(0.5, 1.1), loc="lower center",ncol=min(6, len(signal_best_candidate)), fontsize=12)
+    fig.legend(bbox_to_anchor=(0.5, 1.1), loc="lower center",ncol=min(5, len(signal_best_candidate)), fontsize=12)
     fig.tight_layout()
     
     output_filename = base_dir / (file.stem.replace("topic_distribution", "community_labelling") + ".pdf")
