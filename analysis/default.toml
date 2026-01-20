@@ -142,6 +142,7 @@ outputs.size_statistics_path = "community_quantile_size_distribution.csv"
 [plot_generation.outputs]
 structural_step_plot_filename = "structural_stats.pdf"
 backbone_structural_step_plot_filename = "backbone_structural_stats.pdf"
+random_validation_output_filename = "random_plots_validation_null_hypotesis.pdf"
 
 #=====================================#
 #     Graph property validation       #
@@ -149,5 +150,5 @@ backbone_structural_step_plot_filename = "backbone_structural_stats.pdf"
 
 [graph_property_validation]
 iterations = 10
-outputs.stats_out = "graph_property_validation.csv"
-outputs.stats_out_backbone = "graph_property_validation_backbone.csv"
+outputs.stats_out = "graph_property_validation.csv" #Statistics for the original bacbone
+outputs.stats_out_random = "graph_property_validation_random.csv" #statistics for the random generated graphs
