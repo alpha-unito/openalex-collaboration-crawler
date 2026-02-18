@@ -102,64 +102,53 @@ x = [
 ]
 y = [len(data_sorted[str(year)]) for year in x]
 
-fig, ax = plt.subplots(figsize=(13, 4))
-
-ax.plot(
-    x,
-    y,
-    marker='o',
-    linewidth=1.5,
-    markersize=5,
-    label='Works per Year',
-)
-
-for i, (start, end) in enumerate(intervals_years):
-    if i:
-        ax.axvline(
-            x=start,
-            linestyle="--",
-            linewidth=1,
-            alpha=0.35,
-            zorder=0,
-            color="red",
-            label="Interval Separator" if i == 1 else None,
-        )
-
-ax.set_xlabel("Year", fontsize=11)
-ax.set_ylabel("Number of Works", fontsize=11)
-
-ax.set_title(
-    f"Number of Published Works per Year — {analized_country}",
-    fontsize=15,
-    fontweight="bold",
-    pad=12,
-)
-
-ax.grid(axis="y", linestyle="--", alpha=0.4)
-ax.set_axisbelow(True)
-
-ax.set_xticks(x)
-ax.tick_params(axis="x", rotation=60, labelsize=9)
-ax.tick_params(axis="y", labelsize=9)
-
-ax.margins(x=0.02)
-ax.legend(
-    fontsize=9,
-    ncol=3,
-    loc="upper left",
-)
-
-plt.tight_layout()
-plt.savefig(works_per_year_plot_filename,bbox_inches="tight")
-
-df = pd.DataFrame({"Year": x, "Papers": y})
-df.to_csv(works_per_year_plot_filename.replace(".png", ".csv"), index=False)
-
 if intervals_years:
 
-    fig, ax = plt.subplots(figsize=(13, 4))
+    fig, (ax_top, ax_bottom) = plt.subplots(
+        2,
+        1,
+        figsize=(20, 10),
+        sharex=True,
+        gridspec_kw={'hspace': 0}
+    )
 
-    ax.plot(
+    ax_top.plot(
+        x,
+        y,
+        marker='o',
+        linewidth=1.5,
+        markersize=5,
+        label='Works per Year',
+    )
+
+    for i, (start, end) in enumerate(intervals_years):
+        if i:
+            ax_top.axvline(
+                x=start,
+                linestyle="--",
+                linewidth=1,
+                alpha=0.35,
+                color="red",
+            )
+
+    ax_top.set_ylabel("Number of Works", fontsize=11)
+    ax_top.set_title(
+        f"Number of Published Works per Year — {analized_country}",
+        fontsize=15,
+        fontweight="bold",
+        pad=10,
+    )
+
+    ax_top.grid(axis="y", linestyle="--", alpha=0.4)
+    ax_top.set_axisbelow(True)
+
+    # hide x labels on top plot
+    ax_top.tick_params(axis="x", labelbottom=False)
+
+    ax_top.margins(x=0.02)
+    ax_top.legend(fontsize=9, loc="upper left")
+
+    ax_bottom.plot(
         x,
         y,
         marker='o',
@@ -171,27 +160,19 @@ if intervals_years:
     total_works_per_interval_y = []
     total_works_per_interval_x = []
 
-    plt.yscale('log')
-
-    for i, (start, end) in enumerate(intervals_years):
-        if i:
-            ax.axvline(
-                x=start,
-                linestyle="--",
-                linewidth=1,
-                alpha=0.35,
-                zorder=0,
-                color="red",
-                label="Interval Separator" if i == 1 else None,
-            )
-
     for start, end in intervals_years:
-        total_works_per_interval_x.append(start + (((end + 1) - start) / 2))
-        year_works = [len(data_sorted[str(year)]) for year in range(start, end + 1) if str(year) in data_sorted]
+        midpoint = start + (((end + 1) - start) / 2)
+        total_works_per_interval_x.append(midpoint)
+
+        year_works = [
+            len(data_sorted[str(year)])
+            for year in range(start, end + 1)
+            if str(year) in data_sorted
+        ]
 
         total_works_per_interval_y.append(sum(year_works))
 
-    ax.plot(
+    ax_bottom.plot(
         total_works_per_interval_x,
         total_works_per_interval_y,
         marker='x',
@@ -202,11 +183,55 @@ if intervals_years:
         label='Works per interval',
     )
 
+    for i, (start, end) in enumerate(intervals_years):
+        if i:
+            ax_bottom.axvline(
+                x=start,
+                linestyle="--",
+                linewidth=1,
+                alpha=0.35,
+                color="red",
+            )
+
+    ax_bottom.set_yscale('log')  
+    ax_bottom.set_xlabel("Year", fontsize=11)
+    ax_bottom.set_ylabel("Number of Works (log)", fontsize=11)
+    ax_bottom.grid(axis="y", linestyle="--", alpha=0.4)
+    ax_bottom.set_axisbelow(True)
+    ax_bottom.set_xticks(x)
+    ax_bottom.tick_params(axis="x", rotation=60, labelsize=9)
+    ax_bottom.tick_params(axis="y", labelsize=9)
+    ax_bottom.margins(x=0.02)
+    ax_bottom.legend(fontsize=9, loc="upper left")
+
+   
+    fig.subplots_adjust(hspace=0)
+
+    ax_bottom.spines['top'].set_visible(False)
+
+    ax_top.spines['bottom'].set_visible(True)
+    ax_top.spines['bottom'].set_linewidth(1.5)
+    ax_top.spines['bottom'].set_color('black')
+
+    plt.savefig(works_per_year_plot_filename, bbox_inches="tight")
+
+else:
+    # fallback: single linear plot if no intervals provided
+    fig, ax = plt.subplots(figsize=(13, 4))
+
+    ax.plot(
+        x,
+        y,
+        marker='o',
+        linewidth=1.5,
+        markersize=5,
+        label='Works per Year',
+    )
+
     ax.set_xlabel("Year", fontsize=11)
     ax.set_ylabel("Number of Works", fontsize=11)
-
     ax.set_title(
-        f"Number of Published Works per Year and Interval — {analized_country}",
+        f"Number of Published Works per Year — {analized_country}",
         fontsize=15,
         fontweight="bold",
         pad=12,
@@ -214,20 +239,21 @@ if intervals_years:
 
     ax.grid(axis="y", linestyle="--", alpha=0.4)
     ax.set_axisbelow(True)
-
     ax.set_xticks(x)
     ax.tick_params(axis="x", rotation=60, labelsize=9)
     ax.tick_params(axis="y", labelsize=9)
 
     ax.margins(x=0.02)
-    ax.legend(
-        fontsize=9,
-        ncol=3,
-        loc="upper left",
-    )
+    ax.legend(fontsize=9, loc="upper left")
 
-    plt.tight_layout()
-    plt.savefig( f"{works_per_year_plot_filename}", bbox_inches="tight", )
+    plt.savefig(works_per_year_plot_filename, bbox_inches="tight")
+
+df = pd.DataFrame({"Year": x, "Papers": y})
+new_name = works_per_year_plot_filename.split(".")[0] + ".csv"
+df.to_csv(new_name, index=False)
+
+
+print("saved plots works per year")
 
 
 def get_topics_by_year(data, year):
@@ -482,7 +508,7 @@ for start, end in units:
     np.savetxt(output_path, np.column_stack((deg, cs)), delimiter=",", header="deg,cs", comments="", fmt="%d")
 
 n = len(units)
-cols = 5
+cols = 3
 rows = int(np.ceil(n / cols))
 
 fig, axs = plt.subplots(

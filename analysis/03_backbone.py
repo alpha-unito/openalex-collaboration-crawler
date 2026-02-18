@@ -53,12 +53,19 @@ if __name__ == "__main__":
         if path.endswith(".csv"):
             graphs_to_process.append(path)
 
+    graphs_to_process = sorted(graphs_to_process, key=lambda x: os.path.getsize(f"{input_networks_path}/{x}"))
 
     for path in graphs_to_process:
         filename = input_networks_path + "/" + path.split("/")[-1].split(".")[0] + ".csv"
         print(f"Processing graph: {filename}")
         
         output_file_name = f"{output_networks_path}/backbone_{path.split("/")[-1].split(".")[0]}.csv"
+
+        if os.path.exists(output_file_name):
+            print(f"Backbone already computed for path {filename}")
+            continue
+
+
         print(f"Output path: {output_file_name}")
         data = pd.read_csv(filename)
         column_names = ['author1', 'author2', 'weight']
