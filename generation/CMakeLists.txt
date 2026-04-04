@@ -39,12 +39,15 @@ set(BOOST_INCLUDE_LIBRARIES filesystem iostreams)
 find_package(Boost QUIET COMPONENTS filesystem iostreams)
 
 if (NOT Boost_FOUND)
+    message(WARNING "Boost not found. Fetching and compiling from source")
     FetchContent_Declare(
         boost
         GIT_REPOSITORY https://github.com/boostorg/boost.git
         GIT_TAG boost-1.89.0
     )
     FetchContent_MakeAvailable(boost)
+else()
+    message(STATUS "Boost found at ${BOOST_ROOT}")
 endif()
 
 FetchContent_MakeAvailable(fmt args indicators simdjson)
