@@ -54,12 +54,13 @@ void process_single_author_file(const std::string &gz_path, std::ofstream &out) 
                 continue;
             }
 
-            auto [id, aff] = parse_json_author_line(line);
+            auto [id, display_name, aff] = parse_json_author_line(line);
             if (aff.empty()) {
                 continue;
             }
 
-            out << R"({ "id":")" << id << R"(","affs":[)";
+            out << R"({ "id":")" << id << R"(","display_name": ")" << display_name
+                << R"(", "affs":[)";
             for (size_t i = 0; i < aff.size(); ++i) {
                 const auto &[country, year] = aff[i];
                 out << "{\"" << year << "\":\"" << country << "\"}";

@@ -11,11 +11,12 @@
 #include "openalex_json.h"
 #include "ui.h"
 
-std::pair<std::string, std::vector<std::pair<std::string, std::string>>>
+std::tuple<std::string, std::string, std::vector<std::pair<std::string, std::string>>>
 parse_json_author_line(std::string_view json_line) {
     using Result = std::pair<std::string, std::vector<std::pair<std::string, std::string>>>;
     std::vector<std::pair<std::string, std::string>> affs;
-    std::string id = "not found";
+    std::string id           = "not found";
+    std::string display_name = "not found";
 
     static thread_local simdjson::ondemand::parser parser; // thread-safe reuse per thread
 
@@ -27,6 +28,11 @@ parse_json_author_line(std::string_view json_line) {
         auto id_field = doc["id"];
         if (!id_field.error()) {
             id = std::string(id_field.get_string().value());
+        }
+
+        auto name_field = doc["display_name"];
+        if (!name_field.error()) {
+            display_name = std::string(name_field.get_string().value());
         }
 
         // Extract affiliations
@@ -62,7 +68,7 @@ parse_json_author_line(std::string_view json_line) {
     } catch (...) {
     }
 
-    return {id, affs};
+    return {id, display_name, affs};
 }
 
 void load_and_compress_authors(AffMap &affiliation_dataset, std::string &country_code_filter) {
@@ -101,13 +107,13 @@ void load_and_compress_authors(AffMap &affiliation_dataset, std::string &country
 
         auto &doc = doc_result.value();
 
-        auto id_res = doc["id"].get_string();
-        if (id_res.error()) {
+        auto display_name = doc["display_name"].get_string();
+        if (display_name.error()) {
             continue;
         }
-        std::string id = std::string(id_res.value());
+        std::string display_name_str = std::string(display_name.value());
 
-        auto &year_map = affiliation_dataset[id];
+        auto &year_map = affiliation_dataset[display_name_str];
 
         auto affiliation_array = doc["affs"].get_array();
         if (affiliation_array.error()) {

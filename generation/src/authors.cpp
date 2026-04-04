@@ -18,6 +18,7 @@
 #include "ui.h"
 #include "utils.h"
 #include <args.hxx>
+#include <ranges>
 
 static std::tuple<std::string, std::string, std::string> parse_cli(int argc, const char **argv) {
     args::ArgumentParser parser("OpenAlex Collaboration Crawler / authors step");
@@ -143,25 +144,8 @@ int main(int argc, const char **argv) {
     }
 
     std::size_t count = 0;
-    for (const auto &[openalex_id, year_map] : affiliation_dataset) {
-        out << "{\"id\":\"" << openalex_id << "\",\"affs\":{";
-
-        std::size_t yi = 0;
-        for (const auto &[year, countries] : year_map) {
-            out << "\"" << year << "\":[";
-            for (std::size_t ci = 0; ci < countries.size(); ++ci) {
-                out << "\"" << countries[ci] << "\"";
-                if (ci + 1 < countries.size()) {
-                    out << ",";
-                }
-            }
-            out << "]";
-            if (++yi < year_map.size()) {
-                out << ",";
-            }
-        }
-
-        out << "}}\n";
+    for (const auto &display_name : affiliation_dataset | std::views::keys) {
+        out << display_name << std::endl;
 
         if (++count % 1000 == 0) {
             save_bar.set_progress(count);
