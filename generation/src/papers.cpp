@@ -199,7 +199,12 @@ int main(int argc, const char **argv) {
         }
     }
 
-    std::ofstream topic_out("topics_distribution.json");
+    auto abs_output =
+       std::filesystem::absolute(std::filesystem::path(configuration.output_file_name));
+
+    const auto base_filename = abs_output.parent_path() / abs_output.stem();
+
+    std::ofstream topic_out(base_filename.string() + "_topics_distribution.json");
     topic_out << "{";
     for (const auto &[k, v] : topics_distribution) {
         topic_out << "\"" << k << "\" : {";
@@ -213,7 +218,7 @@ int main(int argc, const char **argv) {
     topic_out << "}";
     topic_out.close();
 
-    std::ofstream subfields_out("subfields_distribution.json");
+    std::ofstream subfields_out(base_filename.string() + "_subfields_distribution.json");
     subfields_out << "{";
     for (const auto &[k, v] : subfields_distribution) {
         subfields_out << "\"" << k << "\" : {";
