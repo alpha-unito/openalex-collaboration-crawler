@@ -163,7 +163,7 @@ int main(int argc, const char **argv) {
 
                 process_single_paper_file(paths.at(i), out, configuration.country_code,
                                           configuration.concept_id, std::ref(author_filter_list),
-                                          configuration.confidence, topics_subfields[i]);
+                                          configuration.confidence, topics_subfields[t]);
 
                 {
                     std::scoped_lock lk(bar_mtx);
@@ -187,13 +187,13 @@ int main(int argc, const char **argv) {
     }
 
     std::ofstream topic_out("topics_distribution.csv");
-    for (const auto& [k, v] : topics_distribution) {
+    for (const auto &[k, v] : topics_distribution) {
         topic_out << "\"" << k << "\"," << v << std::endl;
     }
     topic_out.close();
 
     std::ofstream subfields_out("subfields_distribution.csv");
-    for (const auto& [k, v] : subfields_distribution) {
+    for (const auto &[k, v] : subfields_distribution) {
         subfields_out << "\"" << k << "\"," << v << std::endl;
     }
     subfields_out.close();
