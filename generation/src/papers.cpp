@@ -142,6 +142,13 @@ int main(int argc, const char **argv) {
     auto extract_bar = get_progress_bar("Processing files", paths.size());
     std::mutex bar_mtx;
 
+    std::vector<std::tuple<std::unordered_map<std::string, unsigned long int>, // paper topics
+                           std::unordered_map<std::string, unsigned long int>  // paper subfields
+                           >>
+        topics_subfields;
+
+    topics_subfields.reserve(num_threads);
+
     for (unsigned t = 0; t < num_threads; ++t) {
         workers.emplace_back([&, t] {
             std::string part_path = "/tmp/paper_extraction.part." + std::to_string(t);
@@ -158,7 +165,7 @@ int main(int argc, const char **argv) {
 
                 process_single_paper_file(paths.at(i), out, configuration.country_code,
                                           configuration.concept_id, std::ref(author_filter_list),
-                                          configuration.confidence);
+                                          configuration.confidence, topics_subfields[i]);
 
                 {
                     std::scoped_lock lk(bar_mtx);
@@ -171,6 +178,27 @@ int main(int argc, const char **argv) {
     for (auto &th : workers) {
         th.join();
     }
+
+    std::unordered_map<std::string, unsigned long int> topics_distribution, subfields_distribution;
+
+    for (auto map : topics_subfields) {
+        auto frst = std::get<0>(map);
+        auto snd  = std::get<1>(map);
+        topics_distribution.insert(frst.begin(), frst.end());
+        subfields_distribution.insert(snd.begin(), snd.end());
+    }
+
+    std::ofstream topic_out("topics_distribution.csv");
+    for (const auto& [k, v] : topics_distribution) {
+        topic_out << "\"" << k << "\"," << v << std::endl;
+    }
+    topic_out.close();
+
+    std::ofstream subfields_out("subfields_distribution.csv");
+    for (const auto& [k, v] : subfields_distribution) {
+        subfields_out << "\"" << k << "\"," << v << std::endl;
+    }
+    subfields_out.close();
 
     std::vector<std::string> part_files;
 

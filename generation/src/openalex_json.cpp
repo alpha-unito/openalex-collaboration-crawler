@@ -271,3 +271,22 @@ get_paper_authors(const std::string &raw_json, const std::string &concept_filter
 
     return authors;
 }
+
+void extract_paper_topics_and_subfields(
+    const std::string &raw_json, std::unordered_map<std::string, unsigned long int> &paper_topics,
+    std::unordered_map<std::string, unsigned long int> &paper_subfields) {
+    try {
+        simdjson::ondemand::parser parser;
+        simdjson::padded_string json_line(raw_json);
+        simdjson::ondemand::document doc = parser.iterate(json_line);
+        for (auto topics = doc["topics"].get_array(); simdjson::ondemand::object topic : topics) {
+            const auto display_name = std::string(topic["display_name"].get_string().value());
+            auto subfield_name =
+                std::string(topic["subfield"]["display_name"].get_string().value());
+            paper_topics[display_name]++;
+            paper_subfields[subfield_name]++;
+        }
+
+    } catch (...) {
+    }
+}

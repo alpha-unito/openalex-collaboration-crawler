@@ -14,5 +14,8 @@ load_authors_affiliations(const std::filesystem::path &author_file);
 std::vector<std::pair<std::string, std::string>>
 get_paper_authors(const std::string &raw_json, const std::string &concept_filter,
                   double confidency);
+void extract_paper_topics_and_subfields(
+    const std::string &raw_json, std::unordered_map<std::string, unsigned long int> &paper_topics,
+    std::unordered_map<std::string, unsigned long int> &paper_subfields);
 
 #endif // OPENALEX_AUTHORS_CPP_OPENALEX_JSON_H

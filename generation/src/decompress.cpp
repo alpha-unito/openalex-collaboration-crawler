@@ -94,10 +94,12 @@ std::string to_lower(std::string s) {
     return s;
 }
 
-void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstream &out,
-                               const std::string &affiliation_country,
-                               const std::string &concept_filter,
-                               const std::set<std::string> &keep_author_list, double confidence) {
+void process_single_paper_file(
+    const std::filesystem::path &gz_path, std::ofstream &out,
+    const std::string &affiliation_country, const std::string &concept_filter,
+    const std::set<std::string> &keep_author_list, double confidence,
+    std::tuple<std::unordered_map<std::string, unsigned long int>,
+               std::unordered_map<std::string, unsigned long int>> &topics_and_subfields_maps) {
 
     try {
         std::ifstream file(gz_path, std::ios::binary);
@@ -143,6 +145,9 @@ void process_single_paper_file(const std::filesystem::path &gz_path, std::ofstre
                     continue;
                 }
             }
+
+            extract_paper_topics_and_subfields(line, std::get<0>(topics_and_subfields_maps),
+                                               std::get<1>(topics_and_subfields_maps));
 
             out << line << '\n';
         }
