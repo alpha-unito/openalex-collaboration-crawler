@@ -283,8 +283,18 @@ void extract_paper_topics_and_subfields(
             const auto display_name = std::string(topic["display_name"].get_string().value());
             auto subfield_name =
                 std::string(topic["subfield"]["display_name"].get_string().value());
-            paper_topics[display_name]++;
-            paper_subfields[subfield_name]++;
+
+            if (!paper_topics.contains(display_name)) {
+                paper_topics[display_name] = 1;
+            } else {
+                paper_topics[display_name]++;
+            }
+
+            if (!paper_subfields.contains(subfield_name)) {
+                paper_subfields[subfield_name] = 1;
+            } else {
+                paper_subfields[subfield_name]++;
+            }
         }
 
     } catch (...) {
