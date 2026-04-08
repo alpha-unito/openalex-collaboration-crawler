@@ -146,8 +146,9 @@ void process_single_paper_file(
                 }
             }
             out << line << '\n';
-            extract_paper_topics_and_subfields(line, std::get<0>(topics_and_subfields_maps),
-                                               std::get<1>(topics_and_subfields_maps));
+            auto& topic_map    = std::get<0>(topics_and_subfields_maps);
+            auto& subfield_map = std::get<1>(topics_and_subfields_maps);
+            extract_paper_topics_and_subfields(line, topic_map, subfield_map);
         }
 
         out.flush();
