@@ -284,7 +284,6 @@ std::vector<std::pair<std::string, std::string>> get_paper_authors_topics_and_su
         }
 
     } catch (const simdjson::simdjson_error &e) {
-        std::cerr << "Unable to parse JSON line: " << e.what() << '\n';
         return {};
     }
 
