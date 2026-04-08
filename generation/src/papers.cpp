@@ -145,9 +145,7 @@ int main(int argc, const char **argv) {
     std::vector<std::tuple<std::unordered_map<std::string, unsigned long int>, // paper topics
                            std::unordered_map<std::string, unsigned long int>  // paper subfields
                            >>
-        topics_subfields;
-
-    topics_subfields.reserve(num_threads);
+        topics_subfields(num_threads);
 
     for (unsigned t = 0; t < num_threads; ++t) {
         workers.emplace_back([&, t] {
