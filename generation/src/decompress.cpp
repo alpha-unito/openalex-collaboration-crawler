@@ -98,8 +98,9 @@ void process_single_paper_file(
     const std::filesystem::path &gz_path, std::ofstream &out,
     const std::string &affiliation_country, const std::string &concept_filter,
     const std::set<std::string> &keep_author_list, double confidence,
-    std::tuple<std::unordered_map<std::string, unsigned long int>,
-               std::unordered_map<std::string, unsigned long int>> &topics_and_subfields_maps) {
+    std::tuple<std::unordered_map<std::string, std::unordered_map<int, unsigned long int>>,
+               std::unordered_map<std::string, std::unordered_map<int, unsigned long int>>>
+        &topics_and_subfields_maps) {
 
     try {
         std::ifstream file(gz_path, std::ios::binary);
@@ -129,7 +130,10 @@ void process_single_paper_file(
             }
 
             if (!keep_author_list.empty()) {
-                const auto authors = get_paper_authors(line, concept_filter, confidence);
+                auto &topic_map    = std::get<0>(topics_and_subfields_maps);
+                auto &subfield_map = std::get<1>(topics_and_subfields_maps);
+                const auto authors = get_paper_authors_topics_and_subfields(
+                    line, concept_filter, confidence, topic_map, subfield_map);
 
                 bool found = std::ranges::any_of(authors, [&](const auto &a) {
                     auto [author_name, affiliation] = a;
@@ -146,9 +150,6 @@ void process_single_paper_file(
                 }
             }
             out << line << '\n';
-            auto& topic_map    = std::get<0>(topics_and_subfields_maps);
-            auto& subfield_map = std::get<1>(topics_and_subfields_maps);
-            extract_paper_topics_and_subfields(line, topic_map, subfield_map);
         }
 
         out.flush();

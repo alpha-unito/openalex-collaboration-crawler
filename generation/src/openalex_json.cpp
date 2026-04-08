@@ -212,10 +212,10 @@ load_authors_affiliations(const std::filesystem::path &author_file) {
     return authors;
 }
 
-std::vector<std::pair<std::string, std::string>>
-get_paper_authors(const std::string &raw_json, const std::string &concept_filter,
-                  double confidency) {
-
+std::vector<std::pair<std::string, std::string>> get_paper_authors_topics_and_subfields(
+    const std::string &raw_json, const std::string &concept_filter, double confidency,
+    std::unordered_map<std::string, std::unordered_map<int, unsigned long int>> &paper_topics,
+    std::unordered_map<std::string, std::unordered_map<int, unsigned long int>> &paper_subfields) {
     // check if concept is found in the raw json
     if (raw_json.find(concept_filter) == std::string::npos) {
         return {};
@@ -264,39 +264,29 @@ get_paper_authors(const std::string &raw_json, const std::string &concept_filter
             authors.emplace_back(std::move(name), std::move(affiliation));
         }
 
-    } catch (const simdjson::simdjson_error &e) {
-        std::cerr << "Unable to parse JSON line: " << e.what() << '\n';
-        return {};
-    }
-
-    return authors;
-}
-
-void extract_paper_topics_and_subfields(
-    const std::string &raw_json, std::unordered_map<std::string, unsigned long int> &paper_topics,
-    std::unordered_map<std::string, unsigned long int> &paper_subfields) {
-    try {
-        simdjson::ondemand::parser parser;
-        simdjson::padded_string json_line(raw_json);
-        simdjson::ondemand::document doc = parser.iterate(json_line);
+        int paper_year = doc["publication_year"].get_int64().value();
         for (auto topics = doc["topics"].get_array(); simdjson::ondemand::object topic : topics) {
             const auto display_name = std::string(topic["display_name"].get_string().value());
             auto subfield_name =
                 std::string(topic["subfield"]["display_name"].get_string().value());
 
             if (!paper_topics.contains(display_name)) {
-                paper_topics[display_name] = 1;
+                paper_topics[display_name][paper_year] = 1;
             } else {
-                paper_topics[display_name]++;
+                paper_topics[display_name][paper_year]++;
             }
 
             if (!paper_subfields.contains(subfield_name)) {
-                paper_subfields[subfield_name] = 1;
+                paper_subfields[subfield_name][paper_year] = 1;
             } else {
-                paper_subfields[subfield_name]++;
+                paper_subfields[subfield_name][paper_year]++;
             }
         }
 
-    } catch (...) {
+    } catch (const simdjson::simdjson_error &e) {
+        std::cerr << "Unable to parse JSON line: " << e.what() << '\n';
+        return {};
     }
+
+    return authors;
 }

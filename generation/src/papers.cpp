@@ -142,9 +142,13 @@ int main(int argc, const char **argv) {
     auto extract_bar = get_progress_bar("Processing files", paths.size());
     std::mutex bar_mtx;
 
-    std::vector<std::tuple<std::unordered_map<std::string, unsigned long int>, // paper topics
-                           std::unordered_map<std::string, unsigned long int>  // paper subfields
-                           >>
+    std::vector<std::tuple<
+        std::unordered_map<std::string,
+                           std::unordered_map<int, unsigned long int>>, // topics indexed by topic
+                                                                        // -> year -> count
+        std::unordered_map<
+            std::string, std::unordered_map<int, unsigned long int>>>> // subfield indexed by topic
+                                                                       // -> year -> count
         topics_subfields(num_threads);
 
     for (unsigned t = 0; t < num_threads; ++t) {
@@ -177,25 +181,50 @@ int main(int argc, const char **argv) {
         th.join();
     }
 
-    std::unordered_map<std::string, unsigned long int> topics_distribution, subfields_distribution;
+    std::unordered_map<std::string, std::unordered_map<int, unsigned long int>> topics_distribution,
+        subfields_distribution;
 
-    for (auto map : topics_subfields) {
-        auto frst = std::get<0>(map);
-        auto snd  = std::get<1>(map);
-        topics_distribution.insert(frst.begin(), frst.end());
-        subfields_distribution.insert(snd.begin(), snd.end());
+    for (auto &[topics_map, subfield_map] : topics_subfields) {
+
+        for (const auto &[topic_name, year_counts] : topics_map) {
+            for (const auto [year, count] : year_counts) {
+                topics_distribution[topic_name][year] += count;
+            }
+        }
+
+        for (const auto &[subfield_name, year_counts] : subfield_map) {
+            for (const auto [year, count] : year_counts) {
+                subfields_distribution[subfield_name][year] += count;
+            }
+        }
     }
 
-    std::ofstream topic_out("topics_distribution.csv");
+    std::ofstream topic_out("topics_distribution.json");
+    topic_out << "{";
     for (const auto &[k, v] : topics_distribution) {
-        topic_out << "\"" << k << "\"," << v << std::endl;
+        topic_out << "\"" << k << "\" : {";
+        for (const auto [year, count] : v) {
+            topic_out << "\"" << year << "\" : " << count << ",";
+        }
+        topic_out.seekp(-1, std::ios::cur);
+        topic_out << "}," << std::endl;
     }
+    topic_out.seekp(-2, std::ios::cur);
+    topic_out << "}";
     topic_out.close();
 
-    std::ofstream subfields_out("subfields_distribution.csv");
+    std::ofstream subfields_out("subfields_distribution.json");
+    subfields_out << "{";
     for (const auto &[k, v] : subfields_distribution) {
-        subfields_out << "\"" << k << "\"," << v << std::endl;
+        subfields_out << "\"" << k << "\" : {";
+        for (const auto [year, count] : v) {
+            subfields_out << "\"" << year << "\" : " << count << ",";
+        }
+        subfields_out.seekp(-1, std::ios::cur);
+        subfields_out << "}," << std::endl;
     }
+    subfields_out.seekp(-2, std::ios::cur);
+    subfields_out << "}";
     subfields_out.close();
 
     std::vector<std::string> part_files;
