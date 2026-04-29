@@ -1,91 +1,118 @@
+#!/usr/bin/env python3
+"""
+For each CSV file (id1,id2,count) in the input directory:
+  - Track which file each ID appears in first
+  - Calculate Total New IDs and Average New IDs per year
+  - Plot both on the SAME scale (single Y-axis)
+"""
+
 import os
 import sys
 import glob
 import re
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 
-def extract_start_year(filename: str) -> int:
-    """Return the first 4-digit year found in the filename, or 0 if none."""
-    match = re.search(r"\d{4}", filename)
-    return int(match.group()) if match else 0
+def parse_years(filename: str) -> tuple[int, int, int]:
+    """Returns (start_year, end_year, duration)."""
+    stem = os.path.splitext(filename)[0]
+    years = [int(y) for y in re.findall(r"\d{4}", stem)]
+    
+    if re.search(r"__\d{4}", stem): # Before 2000
+        return years[0], years[0], 1
+    if re.search(r"\d{4}__", stem): # 2020 and after
+        return years[0], years[0], 1
+    if len(years) >= 2:             # 2010_2014
+        start, end = sorted(years[:2])
+        return start, end, (end - start + 1)
+    
+    return (years[0], years[0], 1) if years else (0, 0, 1)
+
+
+def label_from_filename(filename: str) -> str:
+    stem = os.path.splitext(filename)[0]
+    if "__" in stem:
+        year = re.search(r"(\d{4})", stem).group(1)
+        return f"<{year}" if stem.startswith("__") else f"{year}+"
+    years = re.findall(r"\d{4}", stem)
+    return f"{years[0]}\u2013{years[1]}" if len(years) >= 2 else (years[0] if years else filename)
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(f"Usage: {sys.argv[0]} <input_directory>")
+    if len(sys.argv) < 2:
+        print(f"Usage: {sys.argv[0]} <input_directory> [<output_pdf_path>]")
         sys.exit(1)
 
     input_dir = sys.argv[1]
+    pdf_path = sys.argv[2] if len(sys.argv) > 2 else "new_authors_per_interval.pdf"
 
-    if not os.path.isdir(input_dir):
-        print(f"Error: '{input_dir}' is not a directory")
-        sys.exit(1)
-
-    pattern = os.path.join(input_dir, "*.csv")
-    files = sorted(glob.glob(pattern), key=lambda p: extract_start_year(os.path.basename(p)))
-
+    files = sorted(
+        glob.glob(os.path.join(input_dir, "*.csv")),
+        key=lambda p: parse_years(os.path.basename(p))[0]
+    )
+    
     if not files:
         print(f"No .csv files found in '{input_dir}'")
         sys.exit(1)
 
-    first_seen: dict[str, str] = {}
+    first_seen = {}
+    results = []
 
-    results = [] 
-
-    total_files = len(files)
-    print(f"Found {total_files} file(s) to process.\n")
-
-    for file_index, filepath in enumerate(files, start=1):
+    for filepath in files:
         filename = os.path.basename(filepath)
-        new_ids = []
-        
-        with open(filepath, "r") as f:
-            total_lines = sum(1 for line in f if line.strip())
-
-        print(f"[{file_index}/{total_files}] {filename}")
+        label = label_from_filename(filename)
+        _, _, duration = parse_years(filename)
+        new_ids_count = 0
 
         with open(filepath, "r") as f:
-            processed_lines = 0
-            for lineno, line in enumerate(f, start=1):
-                line = line.strip()
-                if not line:
-                    continue
-
-                parts = line.split(",")
-                if len(parts) < 2:
-                    print(f"\n  Warning: line {lineno} — skipping malformed line: {line!r}")
-                    continue
-
-                id1, id2 = parts[0].strip(), parts[1].strip()
-
-                for id_ in (id1, id2):
+            for line in f:
+                parts = line.strip().split(",")
+                if len(parts) < 2: continue
+                for id_ in (parts[0].strip(), parts[1].strip()):
                     if id_ not in first_seen:
                         first_seen[id_] = filename
-                        new_ids.append(id_)
+                        new_ids_count += 1
+        
+        results.append({
+            "label": label, 
+            "total": new_ids_count, 
+            "avg": new_ids_count / duration
+        })
 
-                processed_lines += 1
+    # Data for plotting
+    labels = [r["label"] for r in results]
+    totals = [r["total"] for r in results]
+    averages = [r["avg"] for r in results]
 
-                # Redraw progress bar every 1000 lines (or always if file is small)
-                if processed_lines % 1000 == 0 or processed_lines == total_lines:
-                    bar_width = 40
-                    filled = int(bar_width * processed_lines / total_lines) if total_lines else bar_width
-                    bar = "█" * filled + "░" * (bar_width - filled)
-                    pct = 100 * processed_lines // total_lines if total_lines else 100
-                    print(f"\r  [{bar}] {pct:3d}%  {processed_lines:,}/{total_lines:,} lines", end="", flush=True)
+    fig, ax = plt.subplots(figsize=(11, 6))
 
-        print(f"\r  [{'█' * 40}] 100%  {total_lines:,}/{total_lines:,} lines  ✓ {len(new_ids):,} new authors")
-        print()
+    # 1. Bar Chart (Total)
+    bars = ax.bar(labels, totals, color="#aec7e8", edgecolor="#4C72B0", label="Total New Authors")
 
-        results.append((filename, new_ids))
+    # 2. Line Chart (Average) - Same Axis
+    line = ax.plot(labels, averages, color="#d62728", marker="o", markersize=8, 
+                   linewidth=3, label="Avg New Authors / Year", zorder=3)
 
-    print("=" * 51)
-    print(f"{'File':<40}  {'New Authors':>8}")
-    print("-" * 51)
-    for filename, new_ids in results:
-        print(f"{filename:<40}  {len(new_ids):>8,}")
+    # Styling
+    ax.set_title("New Authors: Interval Totals & Annual Average", fontsize=14, fontweight="bold")
+    ax.set_ylabel("Count (Same Scale)", fontsize=11)
+    ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{int(x):,}"))
+    ax.tick_params(axis="x", rotation=35)
+    
+    # Legend
+    ax.legend(frameon=True, loc="upper left")
 
-    print("=" * 51)
-    print(f"Total unique authors across all files: {len(first_seen):,}")
+    # Value Labels for the Line (since it might be much lower than the bars)
+    for i, avg in enumerate(averages):
+        ax.text(i, avg + (max(totals) * 0.02), f"{avg:.1f}", 
+                ha="center", color="#d62728", fontweight="bold", fontsize=9)
+
+    plt.tight_layout()
+    fig.savefig(pdf_path)
+    print(f"Chart saved with uniform scale to: {pdf_path}")
 
 
 if __name__ == "__main__":
