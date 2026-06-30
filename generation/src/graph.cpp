@@ -127,6 +127,11 @@ static std::vector<std::string> extract_topics(simdjson::ondemand::array concept
     return out;
 }
 
+struct CollabCounts {
+    uint64_t total    = 0;
+    uint64_t external = 0;
+};
+
 struct TimeInterval {
     uint64_t start, end;
     std::string file_name;
@@ -358,6 +363,8 @@ int main(int argc, const char **argv) {
     std::vector<std::string> metadata_part_filenames;
     metadata_part_filenames.reserve(num_threads);
 
+    std::vector<std::unordered_map<std::string, CollabCounts>> thread_collab(num_threads);
+
     std::vector<std::thread> workers;
     workers.reserve(num_threads);
 
@@ -389,6 +396,8 @@ int main(int argc, const char **argv) {
             meta_ofs << "work_id,year,num_of_authors,topics\n";
 
             simdjson::ondemand::parser parser;
+
+            auto &local_collab = thread_collab[ID];
 
             std::string line;
             uint64_t bytes_read = 0;
@@ -469,7 +478,10 @@ int main(int argc, const char **argv) {
                 }
 
                 std::vector<std::string> author_vector;
+                std::vector<std::string>
+                    author_institution; // primary org id per author ("" if none)
                 author_vector.reserve(8);
+                author_institution.reserve(8);
                 for (simdjson::ondemand::value aentry : authors_arr) {
                     std::string_view aid_sv;
                     try {
@@ -481,11 +493,43 @@ int main(int argc, const char **argv) {
                     if (aid.rfind(openalex_default_prefix, 0) == 0) {
                         aid = aid.substr(openalex_default_prefix.size());
                     }
+
+                    std::string org_id;
+                    try {
+                        for (simdjson::ondemand::value inst : aentry["institutions"].get_array()) {
+                            std::string_view iid_sv;
+                            if (!inst["id"].get(iid_sv) && !iid_sv.empty()) {
+                                org_id.assign(iid_sv);
+                                if (org_id.rfind(openalex_default_prefix, 0) == 0) {
+                                    org_id = org_id.substr(openalex_default_prefix.size());
+                                }
+                                break; // only need the first
+                            }
+                        }
+                    } catch (...) {
+                    }
+
                     author_vector.push_back(std::move(aid));
+                    author_institution.push_back(std::move(org_id));
                 }
 
                 if (author_vector.empty()) {
                     continue;
+                }
+
+                for (size_t i = 0; i < author_vector.size(); ++i) {
+                    for (size_t j = i + 1; j < author_vector.size(); ++j) {
+                        const bool external = author_institution[i] != author_institution[j];
+
+                        auto &ci = local_collab[author_vector[i]];
+                        auto &cj = local_collab[author_vector[j]];
+                        ci.total += 1;
+                        cj.total += 1;
+                        if (external) {
+                            ci.external += 1;
+                            cj.external += 1;
+                        }
+                    }
                 }
 
                 // Create edge and dump it to file.
@@ -538,6 +582,30 @@ int main(int argc, const char **argv) {
     info_colored("Storing adjacency list metadata to " + metadata_filename);
     merge_files(metadata_part_filenames, metadata_filename);
     info_colored("Done merging metadata files");
+
+    // merge per-thread collaboration counts and write them out
+    info_colored("Merging per-author collaboration counts");
+    std::unordered_map<std::string, CollabCounts> author_collaborations;
+    for (const auto &tc : thread_collab) {
+        for (const auto &[author, counts] : tc) {
+            auto &g = author_collaborations[author];
+            g.total += counts.total;
+            g.external += counts.external;
+        }
+    }
+
+    std::string collab_filename = "collab_factors_" + output_file_base;
+    info_colored("Storing per-author collaboration counts to " + collab_filename);
+    if (std::ofstream collab_ofs(collab_filename, std::ios::out | std::ios::trunc);
+        !collab_ofs.is_open()) {
+        error_colored("Unable to open output file: " + collab_filename);
+    } else {
+        collab_ofs << "author_id,total_collaborations,external_collaborations\n";
+        for (const auto &[author, counts] : author_collaborations) {
+            collab_ofs << author << "," << counts.total << "," << counts.external << "\n";
+        }
+        collab_ofs.flush();
+    }
 
     return 0;
 }
