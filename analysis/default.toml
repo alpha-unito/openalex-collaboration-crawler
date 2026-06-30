@@ -152,3 +152,22 @@ random_validation_output_filename = "random_plots_validation_null_hypotesis.pdf"
 iterations = 10
 outputs.stats_out = "graph_property_validation.csv" #Statistics for the original bacbone
 outputs.stats_out_random = "graph_property_validation_random.csv" #statistics for the random generated graphs
+
+#=====================================#
+#   EXTERNAL COLLABORATION KDE STEP   #
+#=====================================#
+[external_collaboration_kde.inputs]
+# Directory (under workflow_data/country/) holding the collaborations_*.csv files
+# produced by the adjacency-list generator. Leave empty if they sit in the root folder.
+collaboration_directory = "collabs_factor"
+
+# Glob used to discover the per-timeframe collaboration files.
+file_glob = "collaborations_*.csv"
+
+# Output base name used by the generator, stripped from filenames to build the
+# timeframe labels (e.g. collaborations_1980_2009_dataset.csv -> "1980-2009").
+dataset_basename = "dataset.csv"
+
+[external_collaboration_kde.outputs]
+# Output filename for the ridge plot (stored under statistics_out_basedir).
+output_plot_file = "external_collaboration_ridge.pdf"
