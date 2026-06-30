@@ -168,6 +168,14 @@ file_glob = "collaborations_*.csv"
 # timeframe labels (e.g. collaborations_1980_2009_dataset.csv -> "1980-2009").
 dataset_basename = "dataset.csv"
 
+[external_collaboration_kde.aggregate]
+"1960s"     = "1960-1969"
+"1970s"     = "1970-1979"
+"1980s"     = "1980-1989"
+"1990s"     = "1990-1999"
+"2000s"     = "2000-2009"
+
+
 [external_collaboration_kde.outputs]
 # Output filename for the ridge plot (stored under statistics_out_basedir).
 output_plot_file = "external_collaboration_ridge.pdf"
