@@ -127,9 +127,10 @@ static std::vector<std::string> extract_topics(simdjson::ondemand::array concept
     return out;
 }
 
+// Per-author collaboration counters accumulated across the whole dataset.
 struct CollabCounts {
-    uint64_t total    = 0;
-    uint64_t external = 0;
+    uint64_t total    = 0; // number of co-author pair instances this author took part in
+    uint64_t external = 0; // subset of the above where the co-author had a different org id
 };
 
 struct TimeInterval {
@@ -283,6 +284,7 @@ int main(int argc, const char **argv) {
     std::vector<TimeInterval> intervals;
     std::vector<std::shared_ptr<std::mutex>> interval_file_mutexes;
     std::vector<std::shared_ptr<std::ofstream>> interval_files;
+    std::vector<std::string> interval_collab_filenames;
 
     if (format) {
         std::string fmt = *format;
@@ -319,6 +321,7 @@ int main(int argc, const char **argv) {
             }
             interval_file_mutexes.push_back(mtx);
             interval_files.push_back(ofs);
+            interval_collab_filenames.push_back("collaborations_" + output_file_name);
         }
     } else {
         std::string file_name = "all_dataset.csv";
@@ -331,6 +334,7 @@ int main(int argc, const char **argv) {
         }
         interval_file_mutexes.push_back(mtx);
         interval_files.push_back(ofs);
+        interval_collab_filenames.push_back("collaborations_" + file_name);
     }
 
     info_colored("Will generate the following temporal adjacency lists:");
@@ -363,7 +367,9 @@ int main(int argc, const char **argv) {
     std::vector<std::string> metadata_part_filenames;
     metadata_part_filenames.reserve(num_threads);
 
-    std::vector<std::unordered_map<std::string, CollabCounts>> thread_collab(num_threads);
+    // Per-thread, per-interval accumulation of author collaboration counts; merged after join.
+    std::vector<std::vector<std::unordered_map<std::string, CollabCounts>>> thread_collab(
+        num_threads, std::vector<std::unordered_map<std::string, CollabCounts>>(intervals.size()));
 
     std::vector<std::thread> workers;
     workers.reserve(num_threads);
@@ -494,6 +500,7 @@ int main(int argc, const char **argv) {
                         aid = aid.substr(openalex_default_prefix.size());
                     }
 
+                    // Take the author's first (primary) institution id, if any.
                     std::string org_id;
                     try {
                         for (simdjson::ondemand::value inst : aentry["institutions"].get_array()) {
@@ -517,17 +524,28 @@ int main(int argc, const char **argv) {
                     continue;
                 }
 
-                for (size_t i = 0; i < author_vector.size(); ++i) {
-                    for (size_t j = i + 1; j < author_vector.size(); ++j) {
-                        const bool external = author_institution[i] != author_institution[j];
+                int match_idx = -1;
+                for (size_t idx = 0; idx < intervals.size(); ++idx) {
+                    if (intervals[idx].isBetweenThisInterval(pub_year)) {
+                        match_idx = static_cast<int>(idx);
+                        break;
+                    }
+                }
 
-                        auto &ci = local_collab[author_vector[i]];
-                        auto &cj = local_collab[author_vector[j]];
-                        ci.total += 1;
-                        cj.total += 1;
-                        if (external) {
-                            ci.external += 1;
-                            cj.external += 1;
+                if (match_idx >= 0) {
+                    auto &interval_collab = local_collab[match_idx];
+                    for (size_t i = 0; i < author_vector.size(); ++i) {
+                        for (size_t j = i + 1; j < author_vector.size(); ++j) {
+                            const bool external = author_institution[i] != author_institution[j];
+
+                            auto &ci = interval_collab[author_vector[i]];
+                            auto &cj = interval_collab[author_vector[j]];
+                            ci.total += 1;
+                            cj.total += 1;
+                            if (external) {
+                                ci.external += 1;
+                                cj.external += 1;
+                            }
                         }
                     }
                 }
@@ -553,16 +571,14 @@ int main(int argc, const char **argv) {
                 meta_ofs << id_str << "," << std::to_string(pub_year) << ","
                          << std::to_string(author_vector.size()) << "," << topic_list << "\n";
 
-                // write edges to appropriate interval file (first matching interval)
-                for (size_t idx = 0; idx < intervals.size(); ++idx) {
-                    if (const auto &ti = intervals[idx]; ti.isBetweenThisInterval(pub_year)) {
-                        auto &mtx = *interval_file_mutexes[idx];
-                        auto &ofs = *interval_files[idx];
-                        std::lock_guard lock(mtx);
-                        for (auto const &e : edges) {
-                            ofs << e << "\n";
-                        }
-                        break;
+                // write edges to the matching interval file (same interval used for the
+                // collaboration counts above)
+                if (match_idx >= 0) {
+                    auto &mtx = *interval_file_mutexes[match_idx];
+                    auto &ofs = *interval_files[match_idx];
+                    std::lock_guard lock(mtx);
+                    for (auto const &e : edges) {
+                        ofs << e << "\n";
                     }
                 }
             }
@@ -583,28 +599,30 @@ int main(int argc, const char **argv) {
     merge_files(metadata_part_filenames, metadata_filename);
     info_colored("Done merging metadata files");
 
-    // merge per-thread collaboration counts and write them out
-    info_colored("Merging per-author collaboration counts");
-    std::unordered_map<std::string, CollabCounts> author_collaborations;
-    for (const auto &tc : thread_collab) {
-        for (const auto &[author, counts] : tc) {
-            auto &g = author_collaborations[author];
-            g.total += counts.total;
-            g.external += counts.external;
+    // merge per-thread collaboration counts and write one file per timeframe
+    info_colored("Merging per-author collaboration counts per timeframe");
+    for (size_t idx = 0; idx < intervals.size(); ++idx) {
+        std::unordered_map<std::string, CollabCounts> author_collaborations;
+        for (const auto &tc : thread_collab) {
+            for (const auto &[author, counts] : tc[idx]) {
+                auto &g = author_collaborations[author];
+                g.total += counts.total;
+                g.external += counts.external;
+            }
         }
-    }
 
-    std::string collab_filename = "collab_factors_" + output_file_base;
-    info_colored("Storing per-author collaboration counts to " + collab_filename);
-    if (std::ofstream collab_ofs(collab_filename, std::ios::out | std::ios::trunc);
-        !collab_ofs.is_open()) {
-        error_colored("Unable to open output file: " + collab_filename);
-    } else {
-        collab_ofs << "author_id,total_collaborations,external_collaborations\n";
-        for (const auto &[author, counts] : author_collaborations) {
-            collab_ofs << author << "," << counts.total << "," << counts.external << "\n";
+        const std::string &collab_filename = interval_collab_filenames[idx];
+        info_colored("Storing per-author collaboration counts to " + collab_filename);
+        if (std::ofstream collab_ofs(collab_filename, std::ios::out | std::ios::trunc);
+            !collab_ofs.is_open()) {
+            error_colored("Unable to open output file: " + collab_filename);
+        } else {
+            collab_ofs << "author_id,total_collaborations,external_collaborations\n";
+            for (const auto &[author, counts] : author_collaborations) {
+                collab_ofs << author << "," << counts.total << "," << counts.external << "\n";
+            }
+            collab_ofs.flush();
         }
-        collab_ofs.flush();
     }
 
     return 0;
