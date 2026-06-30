@@ -284,7 +284,6 @@ int main(int argc, const char **argv) {
     std::vector<TimeInterval> intervals;
     std::vector<std::shared_ptr<std::mutex>> interval_file_mutexes;
     std::vector<std::shared_ptr<std::ofstream>> interval_files;
-    std::vector<std::string> interval_collab_filenames;
 
     if (format) {
         std::string fmt = *format;
@@ -321,7 +320,6 @@ int main(int argc, const char **argv) {
             }
             interval_file_mutexes.push_back(mtx);
             interval_files.push_back(ofs);
-            interval_collab_filenames.push_back("collaborations_" + output_file_name);
         }
     } else {
         std::string file_name = "all_dataset.csv";
@@ -334,7 +332,6 @@ int main(int argc, const char **argv) {
         }
         interval_file_mutexes.push_back(mtx);
         interval_files.push_back(ofs);
-        interval_collab_filenames.push_back("collaborations_" + file_name);
     }
 
     info_colored("Will generate the following temporal adjacency lists:");
@@ -367,9 +364,11 @@ int main(int argc, const char **argv) {
     std::vector<std::string> metadata_part_filenames;
     metadata_part_filenames.reserve(num_threads);
 
-    // Per-thread, per-interval accumulation of author collaboration counts; merged after join.
-    std::vector<std::vector<std::unordered_map<std::string, CollabCounts>>> thread_collab(
-        num_threads, std::vector<std::unordered_map<std::string, CollabCounts>>(intervals.size()));
+    // Per-thread, per-year accumulation of author collaboration counts; merged after join.
+    // Keyed by publication year so collaboration stats are produced for each single year,
+    // independently of the (interval-based) edge output.
+    std::vector<std::unordered_map<uint64_t, std::unordered_map<std::string, CollabCounts>>>
+        thread_collab(num_threads);
 
     std::vector<std::thread> workers;
     workers.reserve(num_threads);
@@ -524,6 +523,9 @@ int main(int argc, const char **argv) {
                     continue;
                 }
 
+                // Determine which interval (timeframe) this paper falls into. We attribute both
+                // edges and collaboration counts to the first matching interval, mirroring the
+                // original edge-writing behaviour. Papers outside every interval are skipped.
                 int match_idx = -1;
                 for (size_t idx = 0; idx < intervals.size(); ++idx) {
                     if (intervals[idx].isBetweenThisInterval(pub_year)) {
@@ -532,20 +534,18 @@ int main(int argc, const char **argv) {
                     }
                 }
 
-                if (match_idx >= 0) {
-                    auto &interval_collab = local_collab[match_idx];
-                    for (size_t i = 0; i < author_vector.size(); ++i) {
-                        for (size_t j = i + 1; j < author_vector.size(); ++j) {
-                            const bool external = author_institution[i] != author_institution[j];
+                auto &year_collab = local_collab[pub_year];
+                for (size_t i = 0; i < author_vector.size(); ++i) {
+                    for (size_t j = i + 1; j < author_vector.size(); ++j) {
+                        const bool external = author_institution[i] != author_institution[j];
 
-                            auto &ci = interval_collab[author_vector[i]];
-                            auto &cj = interval_collab[author_vector[j]];
-                            ci.total += 1;
-                            cj.total += 1;
-                            if (external) {
-                                ci.external += 1;
-                                cj.external += 1;
-                            }
+                        auto &ci = year_collab[author_vector[i]];
+                        auto &cj = year_collab[author_vector[j]];
+                        ci.total += 1;
+                        cj.total += 1;
+                        if (external) {
+                            ci.external += 1;
+                            cj.external += 1;
                         }
                     }
                 }
@@ -599,26 +599,30 @@ int main(int argc, const char **argv) {
     merge_files(metadata_part_filenames, metadata_filename);
     info_colored("Done merging metadata files");
 
-    // merge per-thread collaboration counts and write one file per timeframe
-    info_colored("Merging per-author collaboration counts per timeframe");
-    for (size_t idx = 0; idx < intervals.size(); ++idx) {
-        std::unordered_map<std::string, CollabCounts> author_collaborations;
-        for (const auto &tc : thread_collab) {
-            for (const auto &[author, counts] : tc[idx]) {
-                auto &g = author_collaborations[author];
+    // merge per-thread collaboration counts and write one file per single year
+    info_colored("Merging per-author collaboration counts per year");
+    std::map<uint64_t, std::unordered_map<std::string, CollabCounts>> per_year;
+    for (const auto &tc : thread_collab) {
+        for (const auto &[year, authors] : tc) {
+            auto &dst = per_year[year];
+            for (const auto &[author, counts] : authors) {
+                auto &g = dst[author];
                 g.total += counts.total;
                 g.external += counts.external;
             }
         }
+    }
 
-        const std::string &collab_filename = interval_collab_filenames[idx];
+    for (const auto &[year, authors] : per_year) {
+        std::string collab_filename =
+            "collaborations_" + std::to_string(year) + "_" + output_file_base;
         info_colored("Storing per-author collaboration counts to " + collab_filename);
         if (std::ofstream collab_ofs(collab_filename, std::ios::out | std::ios::trunc);
             !collab_ofs.is_open()) {
             error_colored("Unable to open output file: " + collab_filename);
         } else {
             collab_ofs << "author_id,total_collaborations,external_collaborations\n";
-            for (const auto &[author, counts] : author_collaborations) {
+            for (const auto &[author, counts] : authors) {
                 collab_ofs << author << "," << counts.total << "," << counts.external << "\n";
             }
             collab_ofs.flush();
