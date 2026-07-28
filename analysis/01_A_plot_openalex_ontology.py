@@ -1,18 +1,21 @@
 import json
+import os
+import sys
+import tomllib
+
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
+from matplotlib.patches import Patch
+import seaborn as sns
 
-subfield_output = 'subfields_distribution.pdf'
-topic_output = 'topic_distribution.pdf'
+subfield_output = 'onthology_subfields_distribution.pdf'
+topic_output = 'onthology_topic_distribution.pdf'
 subfield_input = '/home/marco/Desktop/papers_it_subfields_distribution.json'
 topic_input = '/home/marco/Desktop/papers_it_topics_distribution.json'
-START = 1970
-END = 2024
 limit = 10
 
 
-def plot_stackbar(input_file_path: str, output_file_path: str, start_year: int, end_year: int, N: int) -> None:
+def plot_stackbar(input_file_path: str, output_file_path: str, time_intervals: list, N: int) -> None:
     if not os.path.exists(input_file_path):
         print(f"Error: File not found at {input_file_path}")
         return
@@ -33,11 +36,14 @@ def plot_stackbar(input_file_path: str, output_file_path: str, start_year: int, 
 
     df = pd.DataFrame(records)
 
-    # 3. Explicit Year Filtering
-    df = df[(df['Year'] >= start_year) & (df['Year'] <= end_year)]
+    # 3. Keep years covered by at least one configured interval.
+    interval_mask = pd.Series(False, index=df.index)
+    for start_year, end_year in time_intervals:
+        interval_mask |= df['Year'].between(start_year, end_year)
+    df = df[interval_mask]
 
     if df.empty:
-        print(f"Error: No data found between {start_year} and {end_year}")
+        print("Error: No data found in the configured time intervals")
         return
 
     # 4. Calculate Yearly Totals BEFORE filtering
@@ -57,51 +63,85 @@ def plot_stackbar(input_file_path: str, output_file_path: str, start_year: int, 
         aggfunc='sum'
     ).fillna(0)
 
-    # 7. Generate the plot
-    label = "Topics" if "topic" in input_file_path.lower() else "Subfields"
+    # 7. Generate one subplot per configured interval.
+    tab20 = sns.color_palette('tab20')
+    category_count = len(percentage_df.columns)
+    palette = (
+        tab20
+        if category_count <= len(tab20)
+        else sns.blend_palette(tab20, n_colors=category_count)
+    )
+    category_colors = dict(zip(percentage_df.columns, palette))
 
-    plt.figure(figsize=(18, 10))
+    interval_frames = [
+        percentage_df.loc[
+            (percentage_df.index >= start_year) & (percentage_df.index <= end_year)
+        ]
+        for start_year, end_year in time_intervals
+    ]
+    interval_widths = [max(1, len(interval_df.index)) for interval_df in interval_frames]
 
-    # Plotting using the same Category labels
-    ax = percentage_df.plot(
-        kind='bar',
-        stacked=True,
-        ax=plt.gca(),
-        width=0.85,
-        colormap='tab20'
+    fig, axes = plt.subplots(
+        1,
+        len(time_intervals),
+        figsize=(max(12, 0.32 * sum(interval_widths)), 7),
+        sharey=True,
+        squeeze=False,
+        gridspec_kw={'width_ratios': interval_widths, 'wspace': 0.05}
     )
 
-    plt.title(f'Top {N} {label} ({start_year}-{end_year})', fontsize=16)
-    plt.xlabel('Year', fontsize=12)
-    plt.ylabel('Relative Percentage (%)', fontsize=12)
+    for ax, (start_year, end_year), interval_df in zip(
+        axes.flat, time_intervals, interval_frames
+    ):
+        if interval_df.empty:
+            ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
+        else:
+            interval_df.plot(
+                kind='bar',
+                stacked=True,
+                ax=ax,
+                width=0.85,
+                color=[category_colors[category] for category in interval_df.columns],
+                legend=False
+            )
+            tick_step = max(1, (len(interval_df.index) + 3) // 4)
+            tick_positions = range(0, len(interval_df.index), tick_step)
+            ax.set_xticks(tick_positions)
+            ax.set_xticklabels(interval_df.index[tick_positions], rotation=90)
 
-    # Legend Management: Only show categories that appear in this specific time range
-    handles, labels = ax.get_legend_handles_labels()
+        ax.set_xlabel('')
+        ax.tick_params(axis='both', labelsize=13)
 
-    # Sort legend by average appearance in the plot
-    avg_pct = percentage_df.mean().sort_values(ascending=False)
-    sorted_labels = avg_pct.index.tolist()
-    handle_dict = dict(zip(labels, handles))
-    sorted_handles = [handle_dict[l] for l in sorted_labels if l in handle_dict]
+    axes[0, 0].set_ylabel('Relative Percentage (%)', fontsize=17)
+    fig.supxlabel('Year', fontsize=15, y=-0.025)
 
-    # Adjust layout to fit legend
-    box = ax.get_position()
-    ax.set_position([box.x0, box.y0, box.width * 0.75, box.height])
-
-    plt.legend(
-        sorted_handles,
-        sorted_labels,
-        title=label,
-        bbox_to_anchor=(1.02, 1),
-        loc='upper left',
-        fontsize=9,
-        ncol=2 if len(sorted_labels) > 30 else 1
+    sorted_categories = sorted(percentage_df.columns, key=str.casefold)
+    legend_handles = [
+        Patch(facecolor=category_colors[category], label=category)
+        for category in sorted_categories
+    ]
+    fig.legend(
+        handles=legend_handles,
+        loc='upper center',
+        bbox_to_anchor=(0, -0.06, 1, 0),
+        fontsize=13,
+        ncol=min(3, len(sorted_categories)),
+        mode='expand'
     )
-
-    plt.savefig(output_file_path, bbox_inches='tight')
+    fig.tight_layout()
+    fig.savefig(output_file_path, bbox_inches='tight')
     plt.close()
-    print(f"Generated: {output_file_path} for period {start_year} to {end_year}")
+    print(f"Generated: {output_file_path} for {len(time_intervals)} time intervals")
 
 
-plot_stackbar(subfield_input, subfield_output, START, END, limit)
-plot_stackbar(topic_input, topic_output, START, END, limit)
+toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
+print(f"Parsing {toml_config_path} configuration file")
+with open(toml_config_path, 'rb') as f:
+    configuration = tomllib.load(f)
+
+time_intervals = configuration.get("time_intervals", [])
+if not time_intervals:
+    raise ValueError("The configuration must define at least one time interval")
+
+plot_stackbar(subfield_input, subfield_output, time_intervals, limit)
+plot_stackbar(topic_input, topic_output, time_intervals, limit)

@@ -3,7 +3,37 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
+import seaborn as sns
 from collections import Counter
+from matplotlib.patches import Patch
+
+plt.rcParams.update({'font.size': 15})
+
+
+def get_tab20_palette(color_count):
+    tab20 = sns.color_palette('tab20')
+    if color_count <= len(tab20):
+        return tab20[:color_count]
+    return sns.blend_palette(tab20, n_colors=color_count)
+
+
+def add_legend(ax):
+    handles, labels = ax.get_legend_handles_labels()
+    legend = ax.legend(
+        handles,
+        labels,
+        loc='upper left',
+        bbox_to_anchor=(1, 1),
+        fontsize=15
+    )
+
+    fig = ax.figure
+    fig.canvas.draw()
+    legend_height = legend.get_window_extent(fig.canvas.get_renderer()).height / fig.dpi
+    axes_height = ax.get_position().height * fig.get_figheight()
+    if legend_height > axes_height:
+        fig.set_figheight(fig.get_figheight() * legend_height / axes_height)
+
 
 toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
 
@@ -70,7 +100,7 @@ print(f"{'=' * 60}\n")
 # topics_mapping: Normalizes topic names and groups synonyms/variants.
 # application_domains_mapping: Mapping to unify and filter application-domain labels.
 # application_domains_to_delete: list of application domainst that should be removed from the analisys
-from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete, colors
+from mappings import topics_mapping, application_domains_mapping, application_domains_to_delete
 from topic_to_category import topic_to_category
 
 def normalize_ascii(text):
@@ -131,13 +161,13 @@ if intervals_years:
                 color="red",
             )
 
-    ax_top.set_ylabel("Number of Works", fontsize=11)
-    ax_top.set_title(
-        f"Number of Published Works per Year — {analized_country}",
-        fontsize=15,
-        fontweight="bold",
-        pad=10,
-    )
+    ax_top.set_ylabel("Number of Works", fontsize=17)
+    #ax_top.set_title(
+    #    f"Number of Published Works per Year — {analized_country}",
+    #    fontsize=15,
+    #    fontweight="bold",
+    #    pad=10,
+    #)
 
     ax_top.grid(axis="y", linestyle="--", alpha=0.4)
     ax_top.set_axisbelow(True)
@@ -146,7 +176,7 @@ if intervals_years:
     ax_top.tick_params(axis="x", labelbottom=False)
 
     ax_top.margins(x=0.02)
-    ax_top.legend(fontsize=9, loc="upper left")
+    add_legend(ax_top)
 
     ax_bottom.plot(
         x,
@@ -194,15 +224,15 @@ if intervals_years:
             )
 
     ax_bottom.set_yscale('log')  
-    ax_bottom.set_xlabel("Year", fontsize=11)
-    ax_bottom.set_ylabel("Number of Works (log)", fontsize=11)
+    ax_bottom.set_xlabel("Year", fontsize=15)
+    ax_bottom.set_ylabel("Number of Works (log)", fontsize=17)
     ax_bottom.grid(axis="y", linestyle="--", alpha=0.4)
     ax_bottom.set_axisbelow(True)
     ax_bottom.set_xticks(x)
-    ax_bottom.tick_params(axis="x", rotation=60, labelsize=9)
-    ax_bottom.tick_params(axis="y", labelsize=9)
+    ax_bottom.tick_params(axis="x", rotation=60, labelsize=15)
+    ax_bottom.tick_params(axis="y", labelsize=15)
     ax_bottom.margins(x=0.02)
-    ax_bottom.legend(fontsize=9, loc="upper left")
+    add_legend(ax_bottom)
 
    
     fig.subplots_adjust(hspace=0)
@@ -228,23 +258,23 @@ else:
         label='Works per Year',
     )
 
-    ax.set_xlabel("Year", fontsize=11)
-    ax.set_ylabel("Number of Works", fontsize=11)
-    ax.set_title(
-        f"Number of Published Works per Year — {analized_country}",
-        fontsize=15,
-        fontweight="bold",
-        pad=12,
-    )
+    ax.set_xlabel("Year", fontsize=15)
+    ax.set_ylabel("Number of Works", fontsize=17)
+    #ax.set_title(
+    #    f"Number of Published Works per Year — {analized_country}",
+    #    fontsize=15,
+    #    fontweight="bold",
+    #    pad=12,
+    #)
 
     ax.grid(axis="y", linestyle="--", alpha=0.4)
     ax.set_axisbelow(True)
     ax.set_xticks(x)
-    ax.tick_params(axis="x", rotation=60, labelsize=9)
-    ax.tick_params(axis="y", labelsize=9)
+    ax.tick_params(axis="x", rotation=60, labelsize=15)
+    ax.tick_params(axis="y", labelsize=15)
 
     ax.margins(x=0.02)
-    ax.legend(fontsize=9, loc="upper left")
+    add_legend(ax)
 
     plt.savefig(works_per_year_plot_filename, bbox_inches="tight")
 
@@ -360,22 +390,23 @@ years = list(range(start_year, end_year))
 
 fig = plt.figure(figsize=(11, 6))
 bottom = np.zeros(len(years))
+application_palette = get_tab20_palette(len(categories_over_time))
 
 width = 0.75
 
 hatches = ['/', '\\', '|', '-', '+', 'x', 'o', '\\|', '.', '*']
 
 for i, (category, percentage) in enumerate(categories_over_time.items()):
-    plt.bar(years, percentage, width, bottom=bottom, label=category, color=colors[i % len(colors)], edgecolor='white',
+    plt.bar(years, percentage, width, bottom=bottom, label=category, color=application_palette[i], edgecolor='white',
             linewidth=2)  # , hatch=hatches[i % len(hatches)]
     bottom += np.array(percentage)
 
 plt.xlim(start_year - 1, end_year)
 
 # ylabel
-plt.ylabel('Percentage of Works (%)', fontweight='bold', fontsize=13)
-plt.title(f"Application Domains Over Time: {analized_country}", fontweight='bold', fontsize=15)
-plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1))
+plt.ylabel('Percentage of Works (%)', fontsize=17)#, fontweight='bold')
+#plt.title(f"Application Domains Over Time: {analized_country}", fontweight='bold', fontsize=15)
+add_legend(plt.gca())
 plt.savefig(application_domain_plot_filename, bbox_inches='tight')
 
 print("Saved plot for application domains over time")
@@ -424,31 +455,80 @@ cs_df['Other'] = 100 - cs_df['Total']
 
 cs_topics_over_time['Other'] = cs_df['Other'].values
 
-years = list(range(start_year, end_year))
+other_color = sns.color_palette(['lightgray'])[0]
+cs_base_palette = sns.color_palette('tab20')
+closest_gray = min(
+    cs_base_palette,
+    key=lambda color: sum((channel - gray) ** 2 for channel, gray in zip(color, other_color))
+)
+cs_base_palette.remove(closest_gray)
+non_other_count = len(cs_topics_over_time) - ('Other' in cs_topics_over_time)
+cs_palette = (
+    cs_base_palette[:non_other_count]
+    if non_other_count <= len(cs_base_palette)
+    else sns.blend_palette(cs_base_palette, n_colors=non_other_count)
+)
 
-fig = plt.figure(figsize=(10, 6))
-bottom = np.zeros(len(years))
+color_index = 0
+topic_colors = {}
+for topic in cs_topics_over_time:
+    topic_colors[topic] = other_color if topic == 'Other' else cs_palette[color_index]
+    color_index += topic != 'Other'
 
-width = 0.75
+cs_plot_df = pd.DataFrame(cs_topics_over_time, index=years)
+plot_intervals = intervals_years or [(start_year, end_year - 1)]
+interval_frames = [
+    cs_plot_df.loc[(cs_plot_df.index >= start) & (cs_plot_df.index <= end)]
+    for start, end in plot_intervals
+]
+interval_widths = [max(1, len(interval_df.index)) for interval_df in interval_frames]
 
-hatches = ['/', '\\', '|', '-', '+', 'x', 'o', '\\|', '.', '*']
+fig, axes = plt.subplots(
+    1,
+    len(plot_intervals),
+    figsize=(max(12, 0.32 * sum(interval_widths)), 7),
+    sharey=True,
+    squeeze=False,
+    gridspec_kw={'width_ratios': interval_widths, 'wspace': 0.05}
+)
 
-for i, (topic, percentage) in enumerate(cs_topics_over_time.items()):
-    if topic == "Other":
-        plt.bar(years, percentage, width, bottom=bottom, label=topic, color='lightgrey', edgecolor='white',
-                linewidth=2)  # , hatch=hatches[i % len(hatches)]
+for ax, interval_df in zip(axes.flat, interval_frames):
+    if interval_df.empty:
+        ax.text(0.5, 0.5, 'No data', ha='center', va='center', transform=ax.transAxes)
     else:
-        plt.bar(years, percentage, width, bottom=bottom, label=topic, color=colors[i], edgecolor='white',
-                linewidth=2)  # , hatch=hatches[i % len(hatches)]
-    bottom += np.array(percentage)
+        interval_df.plot(
+            kind='bar',
+            stacked=True,
+            ax=ax,
+            width=0.75,
+            color=[topic_colors[topic] for topic in interval_df.columns],
+            edgecolor='white',
+            linewidth=2,
+            legend=False
+        )
+        tick_step = max(1, (len(interval_df.index) + 3) // 4)
+        tick_positions = range(0, len(interval_df.index), tick_step)
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(interval_df.index[tick_positions], rotation=90)
 
-plt.xlim(start_year - 1, end_year)
+    ax.set_xlabel('')
+    ax.tick_params(axis='both', labelsize=13)
 
-# ylabel
-plt.title(f"Disciplines Over Time: {analized_country}", fontweight='bold', fontsize=15)
-plt.ylabel('Percentage of Works (%)', fontweight='bold', fontsize=13)
-plt.legend(loc='upper right', bbox_to_anchor=(1.35, 1.), ncol=1)
-plt.savefig(cs_topics_over_time_plot_filename, bbox_inches='tight')
+axes[0, 0].set_ylabel('Percentage of Works (%)', fontsize=17)
+fig.supxlabel('Year', fontsize=15, y=-0.025)
+
+sorted_topics = sorted(cs_topics_over_time, key=str.casefold)
+fig.legend(
+    handles=[Patch(facecolor=topic_colors[topic], label=topic) for topic in sorted_topics],
+    loc='upper center',
+    bbox_to_anchor=(0, -0.06, 1, 0),
+    fontsize=13,
+    ncol=min(3, len(sorted_topics)),
+    mode='expand'
+)
+fig.tight_layout()
+fig.savefig(cs_topics_over_time_plot_filename, bbox_inches='tight')
+plt.close(fig)
 
 print("Saved plot for computer science topics over time")
 
@@ -549,14 +629,14 @@ for i, (start, end) in enumerate(units):
     axs[i].set_ylim(bottom=1)
 
     title = f"{start}–{end}" if start != end else str(start)
-    axs[i].set_title(title, fontsize=11, fontweight='bold')
+    axs[i].set_title(title, fontsize=15)#, fontweight='bold')
 
     axs[i].grid(True, alpha=0.4)
 
     if i % cols == 0:
-        axs[i].set_ylabel("CCDF", fontweight='bold')
+        axs[i].set_ylabel("CCDF", fontsize=17)#, fontweight='bold')
     if i >= (rows - 1) * cols:
-        axs[i].set_xlabel("Degree", fontweight='bold')
+        axs[i].set_xlabel("Degree", fontsize=15)#, fontweight='bold')
 
 # Remove unused axes
 for j in range(i + 1, len(axs)):
@@ -565,7 +645,7 @@ for j in range(i + 1, len(axs)):
 fig.suptitle(
     f"CCDFs by Time Interval — {analized_country}",
     fontsize=15,
-    fontweight='bold'
+    #fontweight='bold'
 )
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
