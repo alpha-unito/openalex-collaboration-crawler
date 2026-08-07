@@ -50,6 +50,7 @@ try:
     works_per_year_dataset              = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["works_per_year_dataset"]
     application_domain_plot_filename    = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["application_domain_plot_filename"]
     cs_topics_over_time_plot_filename   = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["cs_topics_over_time_plot_filename"]
+    new_authors_plot_filename           = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["new_authors_plot_filename"]
     ccdf_graph_output_filename          = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["ccdf_graph_output_filename"]
     
     analized_country                    = configuration["analized_country_full"]
@@ -87,6 +88,7 @@ print(f"  Works/Year Plot:      {works_per_year_plot_filename}")
 print(f"  Works/Year Dataset:   {works_per_year_dataset}")
 print(f"  App Domain Plot:      {application_domain_plot_filename}")
 print(f"  CS Topics Plot:       {cs_topics_over_time_plot_filename}")
+print(f"  New Authors Plot:     {new_authors_plot_filename}")
 print(f"  CCDF Path:            {ccdf_path}")
 print(f"  CCDF Graph Filename:  {ccdf_graph_output_filename}")
 
@@ -289,6 +291,90 @@ df.to_csv(new_name, index=False)
 
 
 print("saved plots works per year")
+
+
+first_seen_year = {}
+plot_start_year = intervals_years[0][0] if intervals_years else start_year
+plot_years = list(range(plot_start_year, end_year))
+graph_files = [
+    os.path.join(ccdf_input_path, filename)
+    for filename in os.listdir(ccdf_input_path)
+    if filename.endswith('_dataset.csv') and filename != 'metadata_dataset.csv'
+]
+
+for input_path in graph_files:
+    with open(input_path) as f:
+        for line in f:
+            parts = line.rstrip().split(',')
+            if len(parts) < 4 or not parts[0].isdigit():
+                continue
+            year = int(parts[0])
+            for author_id in parts[2:4]:
+                if year < first_seen_year.get(author_id, year + 1):
+                    first_seen_year[author_id] = year
+
+new_authors_by_year = Counter(first_seen_year.values())
+annual_new_authors = [new_authors_by_year[year] for year in plot_years]
+cumulative_authors = sum(
+    count for year, count in new_authors_by_year.items() if year < plot_start_year
+)
+new_author_fractions = []
+for new_authors in annual_new_authors:
+    cumulative_authors += new_authors
+    new_author_fractions.append(new_authors / cumulative_authors if cumulative_authors else 0)
+
+fig, ax = plt.subplots(figsize=(20, 8))
+bars = ax.bar(
+    plot_years,
+    annual_new_authors,
+    color='#aec7e8',
+    edgecolor='#4C72B0',
+    label='Total New Authors',
+)
+fraction_ax = ax.twinx()
+line, = fraction_ax.plot(
+    plot_years,
+    new_author_fractions,
+    color='#d62728',
+    marker='o',
+    linewidth=3,
+    markersize=5,
+    label='% New / Cumulative Total',
+    zorder=3,
+)
+
+for start, _ in (intervals_years or [])[1:]:
+    if start < end_year:
+        ax.axvline(start, linestyle='--', linewidth=1.5, alpha=0.8, color='darkred')
+
+tick_years = sorted(
+    set(range(plot_start_year, end_year, 5))
+    | {start for start, _ in (intervals_years or [])[1:] if start < end_year}
+)
+ax.set_xticks(tick_years)
+ax.set_xlim(plot_start_year - 0.5, end_year - 0.5)
+ax.set_xlabel('Year', fontsize=20)
+ax.set_ylabel('Number of New Authors', fontsize=20)
+fraction_ax.set_ylabel('% New Authors over Cumulative Total', fontsize=20, color='#d62728')
+ax.tick_params(axis='x', rotation=90, labelsize=20)
+ax.tick_params(axis='y', labelsize=20)
+fraction_ax.tick_params(axis='y', labelsize=20, colors='#d62728')
+ax.yaxis.set_major_formatter(lambda value, _: f"{int(value):,}")
+fraction_ax.yaxis.set_major_formatter(lambda value, _: f"{value:.0%}")
+ax.grid(axis='y', linestyle='--', alpha=0.4)
+ax.set_axisbelow(True)
+ax.legend(
+    [bars, line],
+    ['New Authors (count)', '% New / Cumulative Total'],
+    loc='lower left',
+    bbox_to_anchor=(0, 0.12),
+    fontsize=18,
+)
+
+fig.tight_layout()
+fig.savefig(new_authors_plot_filename, bbox_inches='tight')
+plt.close(fig)
+print("Saved plot for new authors per year")
 
 
 def get_topics_by_year(data, year):
@@ -658,4 +744,3 @@ plt.savefig(
     ccdf_graph_output_filename,
     bbox_inches='tight'
 )
-plt.show()
