@@ -22,7 +22,7 @@ def add_legend(ax):
     legend = ax.legend(
         handles,
         labels,
-        loc='upper left',
+        loc='best',
         bbox_to_anchor=(1, 1),
         fontsize=15
     )
@@ -133,6 +133,10 @@ x = [
 y = [len(data_sorted[str(year)]) for year in x]
 
 if intervals_years:
+    tick_years = sorted(
+        {year for year in x if year % 5 == 0}
+        | {start for start, _ in intervals_years[1:]}
+    )
 
     fig, (ax_top, ax_bottom) = plt.subplots(
         2,
@@ -161,7 +165,7 @@ if intervals_years:
                 color="red",
             )
 
-    ax_top.set_ylabel("Number of Works", fontsize=17)
+    ax_top.set_ylabel("Number of Works", fontsize=20)
     #ax_top.set_title(
     #    f"Number of Published Works per Year — {analized_country}",
     #    fontsize=15,
@@ -174,9 +178,10 @@ if intervals_years:
 
     # hide x labels on top plot
     ax_top.tick_params(axis="x", labelbottom=False)
+    ax_top.tick_params(axis="y", labelsize=20)
 
     ax_top.margins(x=0.02)
-    add_legend(ax_top)
+    ax_top.legend(loc='upper left', fontsize=18)
 
     ax_bottom.plot(
         x,
@@ -224,15 +229,15 @@ if intervals_years:
             )
 
     ax_bottom.set_yscale('log')  
-    ax_bottom.set_xlabel("Year", fontsize=15)
-    ax_bottom.set_ylabel("Number of Works (log)", fontsize=17)
+    ax_bottom.set_xlabel("Year", fontsize=20)
+    ax_bottom.set_ylabel("Number of Works (log)", fontsize=20)
     ax_bottom.grid(axis="y", linestyle="--", alpha=0.4)
     ax_bottom.set_axisbelow(True)
-    ax_bottom.set_xticks(x)
-    ax_bottom.tick_params(axis="x", rotation=60, labelsize=15)
-    ax_bottom.tick_params(axis="y", labelsize=15)
+    ax_bottom.set_xticks(tick_years)
+    ax_bottom.tick_params(axis="x", rotation=90, labelsize=20)
+    ax_bottom.tick_params(axis="y", labelsize=20)
     ax_bottom.margins(x=0.02)
-    add_legend(ax_bottom)
+    ax_bottom.legend(loc='upper left', fontsize=18)
 
    
     fig.subplots_adjust(hspace=0)
@@ -258,8 +263,8 @@ else:
         label='Works per Year',
     )
 
-    ax.set_xlabel("Year", fontsize=15)
-    ax.set_ylabel("Number of Works", fontsize=17)
+    ax.set_xlabel("Year", fontsize=20)
+    ax.set_ylabel("Number of Works", fontsize=20)
     #ax.set_title(
     #    f"Number of Published Works per Year — {analized_country}",
     #    fontsize=15,
@@ -269,12 +274,12 @@ else:
 
     ax.grid(axis="y", linestyle="--", alpha=0.4)
     ax.set_axisbelow(True)
-    ax.set_xticks(x)
-    ax.tick_params(axis="x", rotation=60, labelsize=15)
-    ax.tick_params(axis="y", labelsize=15)
+    ax.set_xticks([year for year in x if year % 5 == 0])
+    ax.tick_params(axis="x", rotation=90, labelsize=20)
+    ax.tick_params(axis="y", labelsize=20)
 
     ax.margins(x=0.02)
-    add_legend(ax)
+    ax.legend(loc='upper left', fontsize=18)
 
     plt.savefig(works_per_year_plot_filename, bbox_inches="tight")
 
