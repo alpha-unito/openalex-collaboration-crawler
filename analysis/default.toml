@@ -58,7 +58,7 @@ new_authors_plot_filename = 'new_authors_per_interval.pdf'
 
 [metadata_analisys.config]
 # Time window for the analysis. Only works published within [start_year, end_year) are used.
-start_year = 1970  # inclusive
+start_year = 1980  # inclusive
 end_year = 2025  # exclusive
 # Maximum number of topics to consider when aggregating or visualizing topic distributions.
 max_topics = 8
