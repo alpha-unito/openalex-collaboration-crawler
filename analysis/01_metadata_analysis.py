@@ -724,20 +724,18 @@ for i, (start, end) in enumerate(units):
 
     axs[i].grid(True, alpha=0.4)
 
-    if i % cols == 0:
-        axs[i].set_ylabel("CCDF", fontsize=17)#, fontweight='bold')
-    if i >= (rows - 1) * cols:
-        axs[i].set_xlabel("Degree", fontsize=15)#, fontweight='bold')
-
 # Remove unused axes
 for j in range(i + 1, len(axs)):
     fig.delaxes(axs[j])
 
-fig.suptitle(
-    f"CCDFs by Time Interval — {analized_country}",
-    fontsize=15,
+fig.supxlabel("Degree", fontsize=15)
+fig.supylabel("CCDF", fontsize=17)
+
+#fig.suptitle(
+   # f"CCDFs by Time Interval — {analized_country}",
+    #fontsize=15,
     #fontweight='bold'
-)
+#)
 
 plt.tight_layout(rect=[0, 0, 1, 0.95])
 plt.savefig(
