@@ -69,7 +69,7 @@ def run(graph_input_directory, output_stats_file, output_stats_file_largest_cc, 
         node_map = {}
         graph = rwx.PyGraph()
         
-        num_lines = int(subprocess.run("wc -l " + graph_path, shell=True, text=True, capture_output=True).stdout.split(' ')[0])
+        num_lines = int(subprocess.run(["wc", "-l", graph_path], check=True, text=True, capture_output=True).stdout.split()[0])
         
         with alive_progress.alive_bar(num_lines) as bar:
             with open(graph_path, 'r') as f:
