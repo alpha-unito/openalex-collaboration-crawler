@@ -1,38 +1,16 @@
 import sys
+import csv
 import json
 import tomllib
 from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-
-
-# ============================================================
-# Global Model (loaded once for speed)
-# ============================================================
-MODEL = SentenceTransformer("all-MiniLM-L6-v2")
 
 
 # ============================================================
 # Utility Functions
 # ============================================================
-def extract_common_thread(topics: list[str]) -> str:
-    if not topics:
-        return ""
-
-    embeddings = MODEL.encode(topics)
-    centroid = embeddings.mean(axis=0, keepdims=True)
-    similarities = cosine_similarity(embeddings, centroid).flatten()
-
-    ranked = np.argsort(similarities)[::-1]
-
-    if len(ranked) > 1:
-        return f" ({topics[ranked[0]]}: {topics[ranked[1]]})"
-    return f" ({topics[ranked[0]]})"
-
-
 def load_config(path: str) -> dict:
     with open(path, "rb") as f:
         return tomllib.load(f)
@@ -67,6 +45,27 @@ def build_signal_matrix(data: dict, topic_map: dict) -> np.ndarray:
         return np.empty((0, len(topic_map)))
 
     return np.vstack(signals)
+
+
+def write_name_candidates(data: dict, output_file: Path):
+    selected_names = {}
+    if output_file.exists():
+        with open(output_file, newline="") as f:
+            selected_names = {
+                row["community_id"]: row.get("selected_name", "")
+                for row in csv.DictReader(f)
+            }
+
+    with open(output_file, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["community_id", "candidate_1", "candidate_2", "candidate_3", "selected_name"])
+        for community_id, topic_counts in data.items():
+            candidates = sorted(topic_counts, key=topic_counts.get, reverse=True)[:3]
+            writer.writerow([
+                community_id,
+                *(candidates + [""] * (3 - len(candidates))),
+                selected_names.get(community_id, ""),
+            ])
 
 
 # ============================================================
@@ -120,6 +119,12 @@ def main():
         with open(file) as f:
             data = json.load(f)
 
+        names_filename = base_dir / (
+            file.stem.replace("topic_distribution", "community_names") + ".csv"
+        )
+        write_name_candidates(data, names_filename)
+        print(f"Saved candidate names to {names_filename}")
+
         signals = build_signal_matrix(data, topic_map)
 
         if signals.size == 0:
@@ -160,20 +165,7 @@ def main():
             if not np.any(signal):
                 continue
 
-            max_idx = np.argmax(signal)
-            general_topic = topics[max_idx]
-
-            threshold_level = signal[max_idx] * 0.95
-            keyword_indices = np.where(signal >= threshold_level)[0]
-
-            keywords = [
-                topics[idx]
-                for idx in keyword_indices
-                if topics[idx] != general_topic
-            ]
-
-            semantic_hint = extract_common_thread(keywords)
-            label = f"Community {i}: {general_topic}{semantic_hint}"
+            label = f"Community {i}: {topics[np.argmax(signal)]}"
             labels.append(label)
 
             ax.plot(

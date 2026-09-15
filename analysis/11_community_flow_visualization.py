@@ -1,12 +1,12 @@
 import pickle
 import os
 import re
+import csv
+import colorsys
 import numpy as np
-import json
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 import matplotlib.patches as patches
-from functools import reduce 
 import tomllib
 import sys
 
@@ -19,6 +19,7 @@ with open(toml_config_path, 'rb') as f:
 try:
     statistics_out_basedir          = configuration["statistics_out_basedir"]
     flow_percentile                 = configuration["community_flow"]["flow_percentile"]
+    display_other                   = configuration["community_flow"]["display_sink_community"]
     community_pickle_directory      = os.path.join(configuration["workflow_data"], configuration["country"], configuration["community_stability"]["outputs"]["communities_output_folder"])
 except Exception as e:
     print(f"Error: key {e} not found")
@@ -44,22 +45,31 @@ def load_communities(community_directory: str) -> dict:
     return loaded_communities
 
 def get_label_for_community(start, end, rank_idx):
-    """Loads label where the key is the OFFSET/RANK in the filtered list."""
-    # Match the logic: file.stem.replace("topic_distribution", "community_labelling")
-    filename = f"community_labelling_{start}_{end}.json"
+    filename = f"community_names_{start}_{end}.csv"
     file_path = os.path.join(statistics_out_basedir, filename)
-    
-    if os.path.exists(file_path):
-        try:
-            with open(file_path, 'r') as f:
-                labels_dict = json.load(f)
-                # Key is the string of the index/rank
-                comm_labels = labels_dict.get(str(rank_idx), [])
-                if comm_labels and len(comm_labels) > 0:
-                    return str(comm_labels[0])
-        except Exception:
-            pass
+
+    try:
+        with open(file_path, newline="") as f:
+            for row in csv.DictReader(f):
+                if row["community_id"] == str(rank_idx):
+                    return row.get("selected_name", "").strip() or row["candidate_1"]
+    except FileNotFoundError:
+        pass
     return f"Rank {rank_idx}"
+
+
+def distinct_color(index):
+    hue = (index * 0.618033988749895) % 1
+    return colorsys.hsv_to_rgb(hue, 0.65, 0.85)
+
+
+def has_flow(interval_idx, members, communities):
+    neighbours = []
+    if interval_idx > 0:
+        neighbours.extend(communities[interval_idx - 1])
+    if interval_idx + 1 < len(communities):
+        neighbours.extend(communities[interval_idx + 1])
+    return any(not members.isdisjoint(other_members) for _, other_members, _ in neighbours)
 
 def draw_sankey_flow(ax, x1, x2, y1_start, y1_end, y2_start, y2_end, color):
     verts = [
@@ -72,13 +82,13 @@ def draw_sankey_flow(ax, x1, x2, y1_start, y1_end, y2_start, y2_end, color):
     codes = [Path.MOVETO, Path.CURVE4, Path.CURVE4, Path.CURVE4, 
              Path.LINETO, Path.CURVE4, Path.CURVE4, Path.CURVE4, Path.CLOSEPOLY]
     path = Path(verts, codes)
-    patch = patches.PathPatch(path, facecolor=color, edgecolor='none', alpha=0.25)
+    patch = patches.PathPatch(path, facecolor=color, edgecolor='none')
     ax.add_patch(patch)
 
 # --- MAIN EXECUTION ---
 if __name__ == "__main__":
     all_communities = load_communities(community_pickle_directory)
-    flow_communities = {}
+    flow_communities = []
     
     # Pre-process: Filter and Rank
     for start, end in community_time_intervals:
@@ -87,12 +97,23 @@ if __name__ == "__main__":
         sizes = [len(c) for c in raw_list]
         threshold = np.percentile(sizes, flow_percentile)
         
-        # We MUST sort descending by size BEFORE assigning the index
-        # to match the rank-based labeling in your JSONs
-        filtered_comms = [c for c in raw_list if len(c) >= threshold]
-        flow_communities[key] = sorted(filtered_comms, key=len, reverse=True)
+        # Keep the original ID while sorting nodes by size for display.
+        filtered_comms = enumerate(set(c) for c in raw_list if len(c) >= threshold)
+        communities = [
+            (rank, members, False)
+            for rank, members in sorted(filtered_comms, key=lambda item: len(item[1]), reverse=True)
+        ]
+        if display_other:
+            other = set().union(*(set(c) for c in raw_list if len(c) < threshold))
+            if other:
+                communities.append((None, other, True))
+        flow_communities.append(communities)
 
-    colors = plt.cm.tab20.colors 
+    flow_communities = [
+        [community for community in communities if has_flow(i, community[1], flow_communities)]
+        for i, communities in enumerate(flow_communities)
+    ]
+
     fig, ax = plt.subplots(figsize=(24, 14)) # Wider for long text labels
     ax.set_xlim(-0.7, len(community_time_intervals) + 0.5)
     ax.set_ylim(-0.1, 1.1)
@@ -103,49 +124,44 @@ if __name__ == "__main__":
 
     # 1. Draw Nodes & use RANK as the label lookup key
     for t_idx, (start, end) in enumerate(community_time_intervals):
-        key = f"{start}-{end}"
-        comms = flow_communities[key] 
-        total_authors = sum(len(c) for c in comms)
+        comms = flow_communities[t_idx]
+        total_authors = sum(len(members) for _, members, _ in comms)
         
         current_y = 1.0
-        for rank, members in enumerate(comms):
+        for display_idx, (rank, members, is_other) in enumerate(comms):
             height = (len(members) / total_authors) * (1.0 - (len(comms) * v_gap))
             y_top = current_y
             y_bottom = current_y - height
             
-            node_color = colors[rank % len(colors)]
+            node_color = distinct_color(sum(len(c) for c in flow_communities[:t_idx]) + display_idx)
             rect = patches.Rectangle((t_idx - 0.05, y_bottom), 0.1, height, 
-                                     color=node_color, alpha=0.85, zorder=3)
+                                     color=node_color, zorder=3)
             ax.add_patch(rect)
             
-            # Use 'rank' as the ID because labeling script used enumerate()
-            label_str = get_label_for_community(start, end, rank)
+            label_str = "Other" if is_other else get_label_for_community(start, end, rank)
             
             ax.text(t_idx + 0.07, (y_top + y_bottom)/2, label_str, 
-                    ha='left', va='center', fontsize=7, color='black', 
+                    ha='left', va='center', fontsize=11, color='black',
                     linespacing=1.1, zorder=4)
             
-            pos_map[(t_idx, rank)] = (y_top, y_bottom, node_color)
+            pos_map[(t_idx, display_idx)] = (y_top, y_bottom, node_color)
             current_y = y_bottom - v_gap
         
-        ax.text(t_idx, -0.06, f"{start}-{end}", ha='center', fontweight='bold', fontsize=12)
+        ax.text(t_idx, -0.06, f"{start}-{end}", ha='center', fontweight='bold', fontsize=15)
 
     # 2. Draw Ribbons
     for t_idx in range(len(community_time_intervals) - 1):
-        key_curr = f"{community_time_intervals[t_idx][0]}-{community_time_intervals[t_idx][1]}"
-        key_next = f"{community_time_intervals[t_idx+1][0]}-{community_time_intervals[t_idx+1][1]}"
-        
-        comms_curr = flow_communities[key_curr]
-        comms_next = flow_communities[key_next]
+        comms_curr = flow_communities[t_idx]
+        comms_next = flow_communities[t_idx + 1]
         
         curr_offset = {i: pos_map[(t_idx, i)][0] for i in range(len(comms_curr))}
         next_offset = {j: pos_map[(t_idx+1, j)][0] for j in range(len(comms_next))}
 
-        for i, members_curr in enumerate(comms_curr):
+        for i, (_, members_curr, _) in enumerate(comms_curr):
             y_top_c, y_bot_c, flow_color = pos_map[(t_idx, i)]
             
-            for j, members_next in enumerate(comms_next):
-                overlap_count = len(set(members_curr).intersection(set(members_next)))
+            for j, (_, members_next, _) in enumerate(comms_next):
+                overlap_count = len(members_curr & members_next)
                 if overlap_count > 0:
                     y_top_n, y_bot_n, _ = pos_map[(t_idx+1, j)]
                     
@@ -161,7 +177,7 @@ if __name__ == "__main__":
                     next_offset[j] -= h_next
 
     pdf_out = os.path.join(statistics_out_basedir, "community_flow_visualization.pdf")
-    plt.title("Semantic Evolution of Communities", fontsize=18, pad=40)
+    plt.title("Semantic Evolution of Communities", fontsize=22, pad=40)
     plt.savefig(pdf_out, bbox_inches='tight', dpi=300)
     plt.close()
     print(f"Sankey plot saved to: {pdf_out}")
