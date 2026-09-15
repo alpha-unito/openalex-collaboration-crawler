@@ -10,10 +10,10 @@ requests
 scikit-learn
 scipy
 seaborn
-sentence-transformers
 spacy
 statsmodels
 sympy
 torch
 tqdm
-transformers
+transformers<5
+rustworkx

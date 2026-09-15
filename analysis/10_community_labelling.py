@@ -6,6 +6,8 @@ from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 # ============================================================
@@ -47,25 +49,65 @@ def build_signal_matrix(data: dict, topic_map: dict) -> np.ndarray:
     return np.vstack(signals)
 
 
-def write_name_candidates(data: dict, output_file: Path):
+def generate_names(prompts, fallbacks, model, tokenizer):
+    inputs = tokenizer(prompts, padding=True, return_tensors="pt").to(model.device)
+    generated = model.generate(**inputs, max_new_tokens=12, do_sample=False)
+    return [
+        tokenizer.decode(result[inputs.input_ids.shape[1]:], skip_special_tokens=True).strip(' \"\'.') or fallback
+        for result, fallback in zip(generated, fallbacks)
+    ]
+
+
+def write_name_candidates(data: dict, output_file: Path, model, tokenizer, used_names):
     selected_names = {}
     if output_file.exists():
         with open(output_file, newline="") as f:
             selected_names = {
-                row["community_id"]: row.get("selected_name", "")
+                row["community_id"]: row.get("selected", row.get("selected_name", ""))
                 for row in csv.DictReader(f)
             }
 
+    candidate_lists = [sorted(topic_counts, key=topic_counts.get, reverse=True)[:3] for topic_counts in data.values()]
+    prompts = [
+        tokenizer.apply_chat_template([
+            {"role": "system", "content": "Return only a concise research community name of at most six words."},
+            {"role": "user", "content": f"Combine these topics: {', '.join(candidates)}"},
+        ], tokenize=False, add_generation_prompt=True)
+        for candidates in candidate_lists
+    ]
+    generated_names = generate_names(prompts, [candidates[0] for candidates in candidate_lists], model, tokenizer)
+
+    period = output_file.stem.removeprefix("community_names_").replace("_", "-")
+    for index, (name, candidates) in enumerate(zip(generated_names, candidate_lists)):
+        if name.casefold() in used_names:
+            prompt = tokenizer.apply_chat_template([
+                {"role": "system", "content": "Return only a concise, specific research community name of at most six words."},
+                {"role": "user", "content": f"The name '{name}' is already used. Create a distinct, more specific name for: {', '.join(candidates)}"},
+            ], tokenize=False, add_generation_prompt=True)
+            name = generate_names([prompt], [candidates[0]], model, tokenizer)[0]
+            if name.casefold() in used_names:
+                name = f"{name} ({period})"
+            suffix = 2
+            base_name = name
+            while name.casefold() in used_names:
+                name = f"{base_name} {suffix}"
+                suffix += 1
+            generated_names[index] = name
+        used_names.add(generated_names[index].casefold())
+
     with open(output_file, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["community_id", "candidate_1", "candidate_2", "candidate_3", "selected_name"])
-        for community_id, topic_counts in data.items():
-            candidates = sorted(topic_counts, key=topic_counts.get, reverse=True)[:3]
+        writer.writerow(["community_id", "generated_name", "candidate_1", "candidate_2", "candidate_3", "selected"])
+        names_by_id = {}
+        for (community_id, _), candidates, generated_name in zip(data.items(), candidate_lists, generated_names):
+            names_by_id[community_id] = generated_name
             writer.writerow([
                 community_id,
+                generated_name,
                 *(candidates + [""] * (3 - len(candidates))),
                 selected_names.get(community_id, ""),
             ])
+    return names_by_id
 
 
 # ============================================================
@@ -109,6 +151,15 @@ def main():
 
     topics = collect_topics(communities_folder)
     topic_map = {topic: idx for idx, topic in enumerate(topics)}
+    model_name = "Qwen/Qwen2.5-1.5B-Instruct"
+    tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True, padding_side="left")
+    tokenizer.pad_token = tokenizer.eos_token
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        local_files_only=True,
+        dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+    ).to("cuda" if torch.cuda.is_available() else "cpu")
+    used_names = set()
 
     # ========================================================
     # Process each JSON file
@@ -122,7 +173,7 @@ def main():
         names_filename = base_dir / (
             file.stem.replace("topic_distribution", "community_names") + ".csv"
         )
-        write_name_candidates(data, names_filename)
+        generated_names = write_name_candidates(data, names_filename, model, tokenizer, used_names)
         print(f"Saved candidate names to {names_filename}")
 
         signals = build_signal_matrix(data, topic_map)
@@ -165,7 +216,7 @@ def main():
             if not np.any(signal):
                 continue
 
-            label = f"Community {i}: {topics[np.argmax(signal)]}"
+            label = f"Community {i}: {generated_names[str(i)]}"
             labels.append(label)
 
             ax.plot(

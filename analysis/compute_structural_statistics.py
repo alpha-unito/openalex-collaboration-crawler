@@ -83,7 +83,7 @@ def run(graph_input_directory, output_stats_file, output_stats_file_largest_cc, 
                     parts   = data.strip().split(",")
                     author1 = parts[0]
                     author2 = parts[1]
-                    weight  = parts[2]
+                    weight  = parts[-1]
             
                     # add the nodes to the graph
                     if author1 not in node_map:
