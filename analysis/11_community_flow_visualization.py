@@ -220,7 +220,6 @@ if __name__ == "__main__":
                     next_offset[j] -= target_height
 
     pdf_out = os.path.join(statistics_out_basedir, "community_flow_visualization.pdf")
-    plt.title("Semantic Evolution of Communities", fontsize=22, pad=40)
     plt.savefig(pdf_out, bbox_inches='tight', dpi=300)
     plt.close()
     print(f"Sankey plot saved to: {pdf_out}")

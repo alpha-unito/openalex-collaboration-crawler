@@ -205,6 +205,7 @@ def main():
 
         ax.set_xlabel("Community ID", fontsize=18)
         ax.set_ylabel("Frequency", fontsize=18)
+        ax.set_xticks([])
 
         cmap = plt.cm.viridis
         colors = cmap(np.linspace(0, 1, len(signals)))
