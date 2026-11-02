@@ -50,6 +50,9 @@ cs_topics_over_time_plot_filename = "cs_topics_over_time.pdf"
 # Directory where CCDF (Complementary Cumulative Distribution Function) plots or data will be stored.
 ccdf_path = "ccdf"
 
+# Directory where the CCDFs of the backbones will be stored.
+backbone_ccdf_path = "ccdf_backbone"
+
 # Filename for the metadata plots
 ccdf_graph_output_filename = 'ccdfs_year_by_year.pdf'
 

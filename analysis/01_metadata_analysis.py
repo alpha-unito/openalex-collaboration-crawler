@@ -45,6 +45,8 @@ try:
     metadata_path                       = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["inputs"]["metadata_path"]
     ccdf_input_path                     = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["inputs"]["graph_directory"]
     ccdf_path                           = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["outputs"]["ccdf_path"]
+    backbone_input_path                 = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["backbones"]["outputs"]["backbone_directory"]
+    backbone_ccdf_path                  = configuration["workflow_data"] + "/" + configuration["country"] + "/" + configuration["metadata_analisys"]["outputs"]["backbone_ccdf_path"]
     
     works_per_year_plot_filename        = configuration["statistics_out_basedir"] + "/" + "intervals_" + configuration["metadata_analisys"]["outputs"]["works_per_year_plot_filename"]
     works_per_year_dataset              = configuration["statistics_out_basedir"] + "/" + configuration["metadata_analisys"]["outputs"]["works_per_year_dataset"]
@@ -77,6 +79,7 @@ print(f"{'=' * 60}")
 print(f"\n[INPUTS]")
 print(f"  Metadata Path:        {metadata_path}")
 print(f"  CCDF Input Path:      {ccdf_input_path}")
+print(f"  Backbone Input Path:  {backbone_input_path}")
 
 print(f"\n[SETTINGS]")
 print(f"  Analyzed Country:     {analized_country}")
@@ -90,6 +93,7 @@ print(f"  App Domain Plot:      {application_domain_plot_filename}")
 print(f"  CS Topics Plot:       {cs_topics_over_time_plot_filename}")
 print(f"  New Authors Plot:     {new_authors_plot_filename}")
 print(f"  CCDF Path:            {ccdf_path}")
+print(f"  Backbone CCDF Path:   {backbone_ccdf_path}")
 print(f"  CCDF Graph Filename:  {ccdf_graph_output_filename}")
 
 print(f"{'=' * 60}\n")
@@ -656,6 +660,7 @@ units = intervals_years if intervals_years else [(year, year) for year in range(
 print(f"Processing {len(units)} CCDF units")
 
 os.makedirs(ccdf_path, exist_ok=True)
+os.makedirs(backbone_ccdf_path, exist_ok=True)
 
 for start, end in units:
     label = f"{start}_{end}"
@@ -678,6 +683,25 @@ for start, end in units:
 
     np.savetxt(output_path, np.column_stack((deg, cs)), delimiter=",", header="deg,cs", comments="", fmt="%d")
 
+for start, end in units:
+    label = f"{start}_{end}"
+    output_path = os.path.join(backbone_ccdf_path, f"{label}.csv")
+
+    print(f"Processing backbone CCDF for {label}...")
+
+    if os.path.exists(output_path):
+        print(f"  Backbone CCDF already exists — skipping")
+        continue
+    input_file_name = f"{backbone_input_path}/backbone_weighted_{label}_dataset.csv"
+    if not os.path.exists(input_file_name):
+        print(f"  No backbone found at {input_file_name} — skipping")
+        continue
+
+    G = nx.from_pandas_edgelist(pd.read_csv(input_file_name), source='source', target='target')
+    deg, cs = eval_ccdf(G)
+
+    np.savetxt(output_path, np.column_stack((deg, cs)), delimiter=",", header="deg,cs", comments="", fmt="%d")
+
 n = len(units)
 cols = 3
 rows = int(np.ceil(n / cols))
@@ -685,60 +709,65 @@ rows = int(np.ceil(n / cols))
 fig, axs = plt.subplots(
     rows,
     cols,
-    figsize=(15, 3 * rows),
-    constrained_layout=False
+    figsize=(13, 3.4 * rows),
+    sharex=True,
+    sharey=True,
+    squeeze=False,
+    layout='constrained'
 )
 axs = axs.flatten()
 
-for i, (start, end) in enumerate(units):
-    label = f"{start}_{end}" #if start != end else str(start)
-    input_path = os.path.join(ccdf_path, f"{label}.csv")
+# Backbone last, so it is drawn on top of the full network.
+ccdf_series = [
+    (ccdf_path, "Full network", "tab:blue"),
+    (backbone_ccdf_path, "Backbone", "tab:red"),
+]
 
-    if not os.path.exists(input_path):
-        print(f"CCDF data for {label} not found — skipping")
-        continue
+for ax, (start, end) in zip(axs, units):
+    label = f"{start}_{end}"
 
-    deg, cs = np.loadtxt(
-        input_path,
-        delimiter=",",
-        skiprows=1,
-        unpack=True
-    )
+    for directory, series_name, color in ccdf_series:
+        input_path = os.path.join(directory, f"{label}.csv")
 
-    axs[i].plot(
-        deg,
-        cs,
-        marker='o',
-        linestyle='None',
-        markersize=2,
-        alpha=0.85,
-    )
+        if not os.path.exists(input_path):
+            print(f"{series_name} CCDF data for {label} not found — skipping")
+            continue
 
-    axs[i].set_xscale('log')
-    axs[i].set_yscale('log')
-    axs[i].set_xlim(left=1)
-    axs[i].set_ylim(bottom=1)
+        deg, cs = np.loadtxt(input_path, delimiter=",", skiprows=1, unpack=True)
+
+        ax.plot(deg, cs / cs.max(), marker='o', linestyle='None', markersize=3.5, color=color, label=series_name)
+
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    ax.minorticks_off()
+    ax.spines[['top', 'right']].set_visible(False)
+    ax.grid(True, color='0.9', linewidth=0.8)
+    ax.set_axisbelow(True)
 
     title = f"{start}–{end}" if start != end else str(start)
-    axs[i].set_title(title, fontsize=15)#, fontweight='bold')
-
-    axs[i].grid(True, alpha=0.4)
+    ax.set_title(title, fontsize=15)
 
 # Remove unused axes
-for j in range(i + 1, len(axs)):
-    fig.delaxes(axs[j])
+for ax in axs[n:]:
+    fig.delaxes(ax)
 
-fig.supxlabel("Degree", fontsize=15)
-fig.supylabel("CCDF", fontsize=17)
+# Keep the bottom of the figure free for the x label and, below it, the legend.
+fig.get_layout_engine().set(rect=(0, 0.125, 1, 0.875))
+fig.supxlabel("Degree", fontsize=15, y=0.08)
+fig.supylabel("CCDF", fontsize=15)
 
-#fig.suptitle(
-   # f"CCDFs by Time Interval — {analized_country}",
-    #fontsize=15,
-    #fontweight='bold'
-#)
-
-plt.tight_layout(rect=[0, 0, 1, 0.95])
-plt.savefig(
-    ccdf_graph_output_filename,
-    bbox_inches='tight'
+fig.legend(
+    *axs[0].get_legend_handles_labels(),
+    loc='lower center',
+    ncol=len(ccdf_series),
+    fontsize=14,
+    markerscale=2,
+    frameon=True,
+    fancybox=False,
+    edgecolor='0.3',
+    framealpha=1,
+    borderpad=0.6,
+    columnspacing=2.5,
 )
+
+plt.savefig(ccdf_graph_output_filename)
