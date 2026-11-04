@@ -216,15 +216,16 @@ print(f"Saved plot to {bacbone_output_plot}")
 
 ############## COMBINED: FULL NETWORK + BACKBONE ##############
 # Same panels as above, with all four series (full network and backbone, each as
-# whole graph and largest CC) in each panel. Colors come from the Okabe-Ito
-# colorblind-safe palette: blues for the full network, oranges for the backbone;
-# solid lines for the whole graph, dashed for the largest CC; one marker per series.
+# whole graph and largest CC) in each panel. The four colors (blue, plum, orange,
+# green) were chosen as a set and validated as colorblind-safe across all pairs
+# (worst CVD dE 9.9, worst normal-vision dE 21.2, OKLab x100); solid lines for the
+# whole graph, dashed for the largest CC; one marker per series.
 
 combined_series = [
-    (prepare_df(stats_file_full), dict(color="#0072B2", marker="o", linestyle="-", label="Full network")),
-    (prepare_df(stats_file_cc), dict(color="#56B4E9", marker="s", linestyle="--", label="Full network (largest CC)")),
-    (prepare_df(bacbone_stats_file_full), dict(color="#D55E00", marker="^", linestyle="-", label="Backbone")),
-    (prepare_df(bacbone_stats_file_cc), dict(color="#E69F00", marker="D", linestyle="--", label="Backbone (largest CC)")),
+    (prepare_df(stats_file_full), dict(color="#2a78d6", marker="o", linestyle="-", label="Full network")),
+    (prepare_df(stats_file_cc), dict(color="#7B2D8E", marker="s", linestyle="--", label="Full network (largest CC)")),
+    (prepare_df(bacbone_stats_file_full), dict(color="#EE7733", marker="^", linestyle="-", label="Backbone")),
+    (prepare_df(bacbone_stats_file_cc), dict(color="#117733", marker="D", linestyle="--", label="Backbone (largest CC)")),
 ]
 
 labels = combined_series[0][0]["label"]
