@@ -25,24 +25,21 @@ print(f"  Weighted Graph Directory:          {input_networks_path}")
 print(f"\n[OUTPUTS]")
 print(f"  Bacbones output directory:    {output_networks_path}")
 
-import networkx as nx
-import numpy as np
 import pandas as pd
-import netbone as nb
-from netbone.filters import threshold_filter
+import netbone_cpp as nb  # provided by the cppbone package
 from pathlib import Path
 
 Path(output_networks_path).mkdir(parents=True, exist_ok=True)
 
 def generate_bacbone(graph):
     """
-    Generate the backbone of a graph using the netbone library.
-    :param graph: NetworkX graph
-    :return: Backbone graph
+    Generate the backbone of a graph using the cppbone library (C++ port of netbone).
+    :param graph: netbone_cpp Graph
+    :return: Backbone graph (netbone_cpp Graph)
     """
     backbone_net = nb.disparity(graph)
-    filtered_backbone_net = threshold_filter(backbone_net, 0.05)
-    
+    filtered_backbone_net = nb.threshold_filter(backbone_net, 0.05)
+
     return filtered_backbone_net
 
 if __name__ == "__main__":
@@ -68,13 +65,13 @@ if __name__ == "__main__":
 
         print(f"Output path: {output_file_name}")
         data = pd.read_csv(filename)
-        column_names = ['author1', 'author2', 'weight']
-        data.columns = column_names
+        data.columns = ['source', 'target', 'weight']
 
-        graph = nx.from_pandas_edgelist(data, source='author1', target='author2', edge_attr='weight', create_using=nx.Graph())
+        graph = nb.Graph.from_pandas(data)
 
         backbone_graph = generate_bacbone(graph)
 
-        g_data = nx.to_pandas_edgelist(backbone_graph)
+        # Downstream steps parse the rows positionally as source,target,weight,p_value
+        g_data = backbone_graph.to_pandas()[['source', 'target', 'weight', 'p_value']]
         g_data.to_csv(output_file_name, index=False)
     

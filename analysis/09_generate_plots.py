@@ -26,6 +26,7 @@ try:
 
     output_plot = base_dir / cfg["plot_generation"]["outputs"]["structural_step_plot_filename"]
     bacbone_output_plot = base_dir / cfg["plot_generation"]["outputs"]["backbone_structural_step_plot_filename"]
+    combined_output_plot = base_dir / cfg["plot_generation"]["outputs"]["combined_structural_step_plot_filename"]
     
     validation_stats_filename_random = cfg["statistics_out_basedir"] + "/" + cfg["graph_property_validation"]["outputs"]["stats_out_random"]
     validation_stats_filename = cfg["statistics_out_basedir"] + "/" + cfg["graph_property_validation"]["outputs"]["stats_out"]
@@ -212,6 +213,68 @@ fig.savefig(bacbone_output_plot)
 plt.close()
 
 print(f"Saved plot to {bacbone_output_plot}")
+
+############## COMBINED: FULL NETWORK + BACKBONE ##############
+# Same panels as above, with all four series (full network and backbone, each as
+# whole graph and largest CC) in each panel. Colors come from the Okabe-Ito
+# colorblind-safe palette: blues for the full network, oranges for the backbone;
+# solid lines for the whole graph, dashed for the largest CC; one marker per series.
+
+combined_series = [
+    (prepare_df(stats_file_full), dict(color="#0072B2", marker="o", linestyle="-", label="Full network")),
+    (prepare_df(stats_file_cc), dict(color="#56B4E9", marker="s", linestyle="--", label="Full network (largest CC)")),
+    (prepare_df(bacbone_stats_file_full), dict(color="#D55E00", marker="^", linestyle="-", label="Backbone")),
+    (prepare_df(bacbone_stats_file_cc), dict(color="#E69F00", marker="D", linestyle="--", label="Backbone (largest CC)")),
+]
+
+labels = combined_series[0][0]["label"]
+for df, style in combined_series:
+    if not df["label"].equals(labels):
+        raise RuntimeError(f"Time interval mismatch for series '{style['label']}'")
+
+
+def combined_line(ax, col, title, ylabel=None, logy=False):
+    for df, style in combined_series:
+        ax.plot(labels, df[col], markersize=7, **style)
+    ax.set_title(title)
+    if ylabel:
+        ax.set_ylabel(ylabel)
+    if logy:
+        ax.set_yscale("log")
+    ax.tick_params(axis="x", rotation=90)
+    ax.grid(True)
+
+
+fig, axes = plt.subplots(3, 3, figsize=(18, 15))
+axes = axes.flatten()
+
+# ---- 1: Nodes vs Edges, each series followed in time order ----
+for df, style in combined_series:
+    axes[0].plot(df["number_of_nodes"], df["number_of_edges"], markersize=7, **style)
+axes[0].set_xscale("log")
+axes[0].set_yscale("log")
+axes[0].set_title("Nodes vs Edges")
+axes[0].set_xlabel("Nodes")
+axes[0].set_ylabel("Edges")
+axes[0].grid(True)
+
+# ---- 2–9: Line plots (log scale where full network and backbone differ by orders of magnitude) ----
+combined_line(axes[1], "mean_degree", "Mean Degree", "Degree", logy=True)
+combined_line(axes[2], "median_degree", "Median Degree", logy=True)
+combined_line(axes[3], "w_mean_degree", "W Mean Degree", "Weighted degree", logy=True)
+combined_line(axes[4], "density", "Density", logy=True)
+combined_line(axes[5], "transitivity", "Transitivity")
+combined_line(axes[6], "max_degree", "Max Degree", "Degree", logy=True)
+combined_line(axes[7], "w_max_degree", "W Max Degree", "Weighted degree", logy=True)
+combined_line(axes[8], "number_of_nodes", "Number of Nodes", "Nodes", logy=True)
+
+fig.legend(*axes[1].get_legend_handles_labels(), loc="upper center", bbox_to_anchor=(0.5, 0.96), ncol=4, fontsize=16)
+fig.tight_layout(rect=[0, 0, 1, 0.91])
+
+fig.savefig(combined_output_plot)
+plt.close()
+
+print(f"Saved plot to {combined_output_plot}")
 
 ########################################
 #     Random Graph null hypotesis      #

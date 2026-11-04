@@ -719,14 +719,14 @@ axs = axs.flatten()
 
 # Backbone last, so it is drawn on top of the full network.
 ccdf_series = [
-    (ccdf_path, "Full network", "tab:blue"),
-    (backbone_ccdf_path, "Backbone", "tab:red"),
+    (ccdf_path, "Full network", "#0072B2", "s"),
+    (backbone_ccdf_path, "Backbone", "#E69F00", "^"),
 ]
 
 for ax, (start, end) in zip(axs, units):
     label = f"{start}_{end}"
 
-    for directory, series_name, color in ccdf_series:
+    for directory, series_name, color, marker in ccdf_series:
         input_path = os.path.join(directory, f"{label}.csv")
 
         if not os.path.exists(input_path):
@@ -735,7 +735,7 @@ for ax, (start, end) in zip(axs, units):
 
         deg, cs = np.loadtxt(input_path, delimiter=",", skiprows=1, unpack=True)
 
-        ax.plot(deg, cs / cs.max(), marker='o', linestyle='None', markersize=3.5, color=color, label=series_name)
+        ax.plot(deg, cs / cs.max(), marker=marker, linestyle='None', markersize=3.5, color=color, label=series_name)
 
     ax.set_xscale('log')
     ax.set_yscale('log')

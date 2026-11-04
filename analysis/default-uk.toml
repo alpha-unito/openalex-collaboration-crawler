@@ -146,6 +146,7 @@ outputs.size_statistics_path = "community_quantile_size_distribution.csv"
 [plot_generation.outputs]
 structural_step_plot_filename = "structural_stats.pdf"
 backbone_structural_step_plot_filename = "backbone_structural_stats.pdf"
+combined_structural_step_plot_filename = "combined_structural_stats.pdf"
 random_validation_output_filename = "random_plots_validation_null_hypotesis.pdf"
 
 
@@ -157,3 +158,22 @@ random_validation_output_filename = "random_plots_validation_null_hypotesis.pdf"
 iterations = 10
 outputs.stats_out = "graph_property_validation.csv" #Statistics for the original bacbone
 outputs.stats_out_random = "graph_property_validation_random.csv" #statistics for the random generated graphs
+
+#=====================================#
+# PATH / CLUSTERING / ASSORTATIVITY   #
+#=====================================#
+[path_clustering_statistics]
+# Average path length, diameter, clustering coefficient and degree assortativity.
+# Backbones are always processed; set this to true to also process the full networks
+# afterwards (much slower). Can be overridden with --full / --no-full on the command line.
+include_full_network = false
+
+# Number of BFS source nodes sampled to estimate the average path length of the largest
+# connected component. 0 = exact (BFS from every node). The diameter is always exact.
+apl_sample_sources = 0
+
+# Seed for the source sampling (only used when apl_sample_sources > 0)
+random_seed = 42
+
+# Output file (stored under statistics_out_basedir). Graphs already in it are skipped.
+outputs.stats_file = "path_clustering_stats.csv"
