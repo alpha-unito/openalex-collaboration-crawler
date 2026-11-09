@@ -221,9 +221,15 @@ collapse_threshold = 0.9
 collapse_min_community_size = 3
 # Seed for the force-directed layouts
 seed = 42
+# Resolution of the single opaque image holding all edges and nodes in the PDF
+raster_dpi = 200
 # Layouts are cached under workflow_data/country/<layout_directory>; set true to recompute them
 recompute_layout = false
 # Directory (under workflow_data/country/) for the cached node positions
 outputs.layout_directory = "backbone_layouts"
 # Plots are saved as <statistics_out_basedir>/<plot_prefix>_<start>_<end>.pdf
 outputs.plot_prefix = "backbone_visualization"
+# Directory (under workflow_data/country/) for the interactive viewer (page + per-interval JSON), used by --serve
+outputs.viewer_directory = "backbone_viewer"
+# Localhost port of the interactive viewer (override with --port)
+viewer_port = 8765

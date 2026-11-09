@@ -88,30 +88,64 @@ The method is made of five stages.
   * The legend lists every top community by rank, name and number of authors; no labels are drawn on the
     plot. The subtitle reports authors, nodes, edges, components, and the number of linked communities
     and collapsed hubs.
-  * Output: <statistics_out_basedir>/<plot_prefix>_<start>_<end>.pdf (marks rasterised at 300 dpi,
-    text stays vector).
+  * Output: <statistics_out_basedir>/<plot_prefix>_<start>_<end>.pdf. To keep the PDF fast to open,
+    all edges and nodes are rendered off-screen into ONE opaque RGB image (`raster_dpi`, default 200)
+    that is embedded in the plot area: no transparency masks for the viewer to composite. Title,
+    subtitle and legend stay vector. The plot area is capped at a 1.4 height/width ratio (16 in wide),
+    so tall layouts are drawn narrower instead of producing very long pages.
 
-Usage:  python 14_backbone_visualization.py [config.toml]
+6. Interactive viewer (optional, --serve)
+-----------------------------------------
+  With --serve, after the PDFs the script also lays out every interval WITHOUT hub collapsing (stage 3
+  is skipped, so no pattern is hidden; same node selection and layout method otherwise, cached
+  separately), exports one JSON file per interval to <workflow_data>/<country>/<viewer_directory>/data/,
+  copies web/backbone_viewer.html next to it as index.html, and serves that folder on
+  http://127.0.0.1:<viewer_port>/ (localhost only) until Ctrl+C. The page, plain HTML + Canvas with no
+  external dependencies, offers:
+  * an interval selector (also <- / -> keys), pan (drag) and zoom (wheel), fit to view;
+  * per-community toggles ("only" isolates one), a toggle for the gray linked communities and one for the
+    edges between different communities;
+  * hover tooltips (author id, community, backbone degree);
+  * area selection (Shift+drag, or the "Select area" tool);
+  * PNG export of the current view, the selected area or the whole (visible) graph, at 1x/2x/4x, with or
+    without title and legend, on white or transparent background.
+
+Usage:  python 14_backbone_visualization.py [config.toml] [--serve [--port N] [--no-browser]]
 """
 
+import argparse
 import csv
+import functools
 import glob
+import http.server
+import json
 import os
 import pickle
-import sys
+import shutil
 import tomllib
+import webbrowser
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.collections import LineCollection
+from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
 # ============================================================
 # Configuration
 # ============================================================
-toml_config_path = sys.argv[1] if len(sys.argv) > 1 else "default.toml"
+parser = argparse.ArgumentParser(description="Draw the backbone networks (PDF) and optionally serve an interactive viewer.")
+parser.add_argument("config", nargs="?", default="default.toml", help="TOML configuration file (default: default.toml)")
+parser.add_argument("--serve", action="store_true",
+                    help="after the PDFs, export the interactive viewer and serve it on localhost")
+parser.add_argument("--port", type=int, default=None, help="port for --serve (default: backbone_visualization.viewer_port)")
+parser.add_argument("--no-browser", action="store_true", help="with --serve, do not open a browser tab")
+args = parser.parse_args()
+
+toml_config_path = args.config
 print(f"Parsing {toml_config_path} configuration file")
 with open(toml_config_path, "rb") as f:
     configuration = tomllib.load(f)
@@ -132,9 +166,13 @@ TOP_N = viz_cfg.get("top_communities", 10)
 COLLAPSE_THRESHOLD = viz_cfg.get("collapse_threshold", 0.9)
 COLLAPSE_MIN_SIZE = viz_cfg.get("collapse_min_community_size", 3)
 SEED = viz_cfg.get("seed", 42)
+RASTER_DPI = viz_cfg.get("raster_dpi", 200)
 FORCE_LAYOUT = viz_cfg.get("recompute_layout", False)
 layout_directory = os.path.join(country_dir, viz_cfg.get("outputs", {}).get("layout_directory", "backbone_layouts"))
 plot_prefix = viz_cfg.get("outputs", {}).get("plot_prefix", "backbone_visualization")
+viewer_directory = os.path.join(country_dir, viz_cfg.get("outputs", {}).get("viewer_directory", "backbone_viewer"))
+VIEWER_PORT = args.port or viz_cfg.get("viewer_port", 8765)
+VIEWER_TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "backbone_viewer.html")
 
 os.makedirs(statistics_out_basedir, exist_ok=True)
 os.makedirs(layout_directory, exist_ok=True)
@@ -154,6 +192,8 @@ print(f"\n[OUTPUTS]")
 print(f"  Layout cache:           {layout_directory}")
 print(f"  Plots:                  {statistics_out_basedir}/{plot_prefix}_<start>_<end>.pdf")
 print(f"  Collapsed nodes:        {statistics_out_basedir}/backbone_collapsed_nodes_<start>_<end>.csv")
+if args.serve:
+    print(f"  Interactive viewer:     {viewer_directory} -> http://127.0.0.1:{VIEWER_PORT}/")
 print(f"\n{'=' * 60}\n")
 
 # ============================================================
@@ -176,6 +216,7 @@ KK_MAX_NODES = 200        # components up to this size use Kamada-Kawai
 COMPONENT_PADDING = 1.2   # gap between packed components (layout units ~ node spacing)
 COMMUNITY_PADDING = 1.5   # gap between community discs inside a large component
 NODE_ROOM = 0.6           # free space kept around a collapsed node's disc
+MAX_PAGE_RATIO = 1.4      # max height/width of the plot area (taller layouts are drawn narrower)
 
 
 # ============================================================
@@ -263,7 +304,7 @@ def select_plotted_subgraph(graph: nx.Graph, communities: list, node_to_communit
     return filtered, len(connected)
 
 
-def collapse_hubs(graph: nx.Graph, full_graph: nx.Graph, node_to_community: dict):
+def collapse_hubs(graph: nx.Graph, full_graph: nx.Graph, node_to_community: dict, enabled: bool = True):
     """
     Merge every community hub connected to > COLLAPSE_THRESHOLD of its community, together with
     those neighbours, into one node. Returns (collapsed graph, list of collapse records).
@@ -273,7 +314,7 @@ def collapse_hubs(graph: nx.Graph, full_graph: nx.Graph, node_to_community: dict
     with summed `weight` and `multiplicity`.
     """
     by_community = {}
-    for node in graph:
+    for node in (graph if enabled else ()):
         by_community.setdefault(node_to_community.get(node, ("solo", node)), set()).add(node)
 
     representative, records = {}, []
@@ -316,8 +357,9 @@ def collapse_hubs(graph: nx.Graph, full_graph: nx.Graph, node_to_community: dict
 
     for record in records:
         record["distinct_neighbours"] = collapsed.degree(record["id"])
-    print(f"\tCollapsed {len(records)} hubs: {graph.number_of_nodes()} -> {collapsed.number_of_nodes()} nodes, "
-          f"{graph.number_of_edges()} -> {collapsed.number_of_edges()} edges")
+    if enabled:
+        print(f"\tCollapsed {len(records)} hubs: {graph.number_of_nodes()} -> {collapsed.number_of_nodes()} nodes, "
+              f"{graph.number_of_edges()} -> {collapsed.number_of_edges()} edges")
     return collapsed, records
 
 
@@ -509,8 +551,9 @@ def compute_layout(graph: nx.Graph) -> dict:
     return _pack_components(layouts, mass)
 
 
-def get_layout(graph: nx.Graph, start, end) -> dict:
-    cache = os.path.join(layout_directory, f"layout_{start}_{end}_top{TOP_N}_c{COLLAPSE_THRESHOLD:g}.pkl")
+def get_layout(graph: nx.Graph, start, end, collapsed: bool = True) -> dict:
+    variant = f"c{COLLAPSE_THRESHOLD:g}" if collapsed else "full"
+    cache = os.path.join(layout_directory, f"layout_{start}_{end}_top{TOP_N}_{variant}.pkl")
     if os.path.exists(cache) and not FORCE_LAYOUT:
         with open(cache, "rb") as f:
             pos = pickle.load(f)
@@ -527,6 +570,43 @@ def get_layout(graph: nx.Graph, start, end) -> dict:
 # ============================================================
 # Drawing
 # ============================================================
+def _draw_marks(ax, graph, pos, top, rank_of, xy, ranks, is_collapsed, sizes, edge_width):
+    """Draw edges and nodes on `ax` (rendered off-screen into a single opaque image)."""
+    # Edges: gray ("Other" or between communities) below, intra-community colored edges above
+    gray_segments, colored_segments = [], {rank: [] for rank, _, _, _ in top}
+    for u, v in graph.edges():
+        ru = rank_of.get(graph.nodes[u]["community"], -1)
+        rv = rank_of.get(graph.nodes[v]["community"], -1)
+        segment = (pos[u], pos[v])
+        if ru == rv and ru >= 0:
+            colored_segments[ru].append(segment)
+        else:
+            gray_segments.append(segment)
+
+    ax.add_collection(LineCollection(gray_segments, colors=OTHER_EDGE_COLOR, linewidths=edge_width,
+                                     alpha=0.55, zorder=1))
+    for rank, segments in colored_segments.items():
+        if segments:
+            ax.add_collection(LineCollection(segments, colors=TOP_COLORS[rank], linewidths=edge_width * 1.2,
+                                             alpha=0.6, zorder=2))
+
+    def color_of(rank):
+        return TOP_COLORS[rank] if rank >= 0 else OTHER_NODE_COLOR
+
+    # collapsed nodes (discs) below the plain authors, largest first so small discs stay visible
+    for i in sorted(np.flatnonzero(is_collapsed), key=lambda i: -sizes[i]):
+        ax.scatter(xy[i, 0], xy[i, 1], s=sizes[i], c=color_of(ranks[i]), alpha=0.85,
+                   edgecolors=SURFACE, linewidths=1.0, zorder=3)
+
+    other = (ranks < 0) & ~is_collapsed
+    ax.scatter(xy[other, 0], xy[other, 1], s=sizes[other], c=OTHER_NODE_COLOR,
+               linewidths=0, zorder=4)
+    for rank, _, _, _ in top:
+        mask = (ranks == rank) & ~is_collapsed
+        ax.scatter(xy[mask, 0], xy[mask, 1], s=sizes[mask], c=TOP_COLORS[rank],
+                   linewidths=0, zorder=5)
+
+
 def draw_backbone(graph: nx.Graph, pos: dict, top: list, start, end, output_path: str, subtitle_note: str):
     rank_of = {idx: rank for rank, idx, _, _ in top}
 
@@ -541,7 +621,7 @@ def draw_backbone(graph: nx.Graph, pos: dict, top: list, start, end, output_path
     lo, hi = (xy - radii[:, None]).min(axis=0), (xy + radii[:, None]).max(axis=0)
     extent = hi - lo
     width = 16
-    height = float(np.clip(width * extent[1] / max(extent[0], 1e-9), 6, 40))
+    height = float(np.clip(width * extent[1] / max(extent[0], 1e-9), 6, width * MAX_PAGE_RATIO))
 
     # Scale marks with the drawing density: points per layout unit (1 unit ~ node spacing)
     points_per_unit = min(width * 72 / max(extent[0], 1e-9), height * 72 / max(extent[1], 1e-9))
@@ -559,41 +639,6 @@ def draw_backbone(graph: nx.Graph, pos: dict, top: list, start, end, output_path
     ax.set_facecolor(SURFACE)
     ax.set_aspect("equal")
     ax.axis("off")
-
-    # Edges: gray ("Other" or between communities) below, intra-community colored edges above
-    gray_segments, colored_segments = [], {rank: [] for rank, _, _, _ in top}
-    for u, v in graph.edges():
-        ru = rank_of.get(graph.nodes[u]["community"], -1)
-        rv = rank_of.get(graph.nodes[v]["community"], -1)
-        segment = (pos[u], pos[v])
-        if ru == rv and ru >= 0:
-            colored_segments[ru].append(segment)
-        else:
-            gray_segments.append(segment)
-
-    ax.add_collection(LineCollection(gray_segments, colors=OTHER_EDGE_COLOR, linewidths=edge_width,
-                                     alpha=0.55, zorder=1, rasterized=True))
-    for rank, segments in colored_segments.items():
-        if segments:
-            ax.add_collection(LineCollection(segments, colors=TOP_COLORS[rank], linewidths=edge_width * 1.2,
-                                             alpha=0.6, zorder=2, rasterized=True))
-
-    def color_of(rank):
-        return TOP_COLORS[rank] if rank >= 0 else OTHER_NODE_COLOR
-
-    # collapsed nodes (discs) below the plain authors, largest first so small discs stay visible
-    for i in sorted(np.flatnonzero(is_collapsed), key=lambda i: -sizes[i]):
-        ax.scatter(xy[i, 0], xy[i, 1], s=sizes[i], c=color_of(ranks[i]), alpha=0.85,
-                   edgecolors=SURFACE, linewidths=1.0, zorder=3, rasterized=True)
-
-    other = (ranks < 0) & ~is_collapsed
-    ax.scatter(xy[other, 0], xy[other, 1], s=sizes[other], c=OTHER_NODE_COLOR,
-               linewidths=0, zorder=4, rasterized=True)
-    for rank, _, _, _ in top:
-        mask = (ranks == rank) & ~is_collapsed
-        ax.scatter(xy[mask, 0], xy[mask, 1], s=sizes[mask], c=TOP_COLORS[rank],
-                   linewidths=0, zorder=5, rasterized=True)
-
     ax.set_xlim(lo[0] - 1, hi[0] + 1)
     ax.set_ylim(lo[1] - 1, hi[1] + 1)
 
@@ -620,15 +665,117 @@ def draw_backbone(graph: nx.Graph, pos: dict, top: list, start, end, output_path
                  fontsize=12, color=TEXT_SECONDARY, pad=8)
 
     fig.tight_layout(rect=(0, 1.6 / (height + 1.8), 1, 0.98))
-    fig.savefig(output_path, dpi=300, facecolor=SURFACE)
+
+    # Render all marks (edges + nodes) off-screen into ONE opaque RGB image matching the plot box,
+    # then embed it: no per-layer transparency masks, so PDF viewers render the page quickly.
+    fig.canvas.draw()
+    ax.apply_aspect()
+    box = ax.get_window_extent()
+    xlim, ylim = ax.get_xlim(), ax.get_ylim()
+    marks_fig = Figure(figsize=(box.width / fig.dpi, box.height / fig.dpi), dpi=RASTER_DPI, facecolor=SURFACE)
+    marks_ax = marks_fig.add_axes((0, 0, 1, 1))
+    marks_ax.set_facecolor(SURFACE)
+    marks_ax.axis("off")
+    marks_ax.set_xlim(xlim)
+    marks_ax.set_ylim(ylim)
+    _draw_marks(marks_ax, graph, pos, top, rank_of, xy, ranks, is_collapsed, sizes, edge_width)
+    canvas = FigureCanvasAgg(marks_fig)
+    canvas.draw()
+    image = np.asarray(canvas.buffer_rgba())[..., :3].copy()
+    ax.imshow(image, extent=(*xlim, *ylim), origin="upper", interpolation="none", aspect="equal", zorder=1)
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    fig.savefig(output_path, dpi=RASTER_DPI, facecolor=SURFACE)
     plt.close(fig)
     print(f"\tSaved → {output_path}")
+
+
+# ============================================================
+# Interactive viewer (--serve)
+# ============================================================
+def export_viewer_data(graph: nx.Graph, pos: dict, top: list, start, end, n_connected: int) -> dict:
+    """Write the uncollapsed plotted graph of one interval as JSON for the browser viewer."""
+    rank_of = {idx: rank for rank, idx, _, _ in top}
+    nodes = list(graph.nodes)
+    index = {node: i for i, node in enumerate(nodes)}
+    xy = np.array([pos[n] for n in nodes])
+    edges = []
+    for u, v in graph.edges():
+        edges.extend((index[u], index[v]))
+    key = f"{start}_{end}"
+    data = {
+        "key": key,
+        "label": f"{start}–{end}",
+        "stats": {
+            "authors": graph.number_of_nodes(),
+            "edges": graph.number_of_edges(),
+            "components": nx.number_connected_components(graph),
+            "connected_communities": n_connected,
+        },
+        "communities": [
+            {"rank": rank + 1, "index": idx, "name": label, "size": len(members), "color": TOP_COLORS[rank]}
+            for rank, idx, members, label in top
+        ],
+        "other_color": OTHER_NODE_COLOR,
+        "other_edge_color": OTHER_EDGE_COLOR,
+        "nodes": {
+            "id": [str(n) for n in nodes],
+            "x": np.round(xy[:, 0], 3).tolist(),
+            "y": np.round(-xy[:, 1], 3).tolist(),  # screen y grows downwards
+            "rank": [rank_of.get(graph.nodes[n]["community"], -1) for n in nodes],
+            "community": [graph.nodes[n]["community"] if isinstance(graph.nodes[n]["community"], int) else -1
+                          for n in nodes],
+            "degree": [int(graph.nodes[n]["degree"]) for n in nodes],
+        },
+        "edges": edges,
+    }
+    os.makedirs(os.path.join(viewer_directory, "data"), exist_ok=True)
+    with open(os.path.join(viewer_directory, "data", f"{key}.json"), "w") as f:
+        json.dump(data, f, separators=(",", ":"))
+    print(f"\tViewer data written to {viewer_directory}/data/{key}.json")
+    return {"key": key, "label": data["label"], "file": f"data/{key}.json", **data["stats"]}
+
+
+def serve_viewer(intervals: list):
+    """Copy the viewer page next to the exported data and serve the folder on localhost."""
+    os.makedirs(viewer_directory, exist_ok=True)
+    shutil.copyfile(VIEWER_TEMPLATE, os.path.join(viewer_directory, "index.html"))
+    with open(os.path.join(viewer_directory, "intervals.json"), "w") as f:
+        json.dump(intervals, f)
+
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+    handler = functools.partial(QuietHandler, directory=viewer_directory)
+    server = None
+    for port in range(VIEWER_PORT, VIEWER_PORT + 20):
+        try:
+            server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+            break
+        except OSError:
+            print(f"Port {port} is already in use, trying {port + 1}...")
+    if server is None:
+        print(f"Error: no free port in {VIEWER_PORT}-{VIEWER_PORT + 19}; free one or pass --port")
+        return
+    url = f"http://127.0.0.1:{port}/"
+    print(f"\nServing the interactive backbone viewer at {url}  (Ctrl+C to stop)")
+    if not args.no_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nViewer stopped.")
+    finally:
+        server.server_close()
 
 
 # ============================================================
 # Main
 # ============================================================
 if __name__ == "__main__":
+    viewer_intervals = []
     for start, end in time_intervals:
         print(f"\nProcessing interval {start}-{end}")
         matches = glob.glob(os.path.join(backbone_directory, f"*{start}_{end}*.csv"))
@@ -652,3 +799,12 @@ if __name__ == "__main__":
         pos = get_layout(graph, start, end)
         output_path = os.path.join(statistics_out_basedir, f"{plot_prefix}_{start}_{end}.pdf")
         draw_backbone(graph, pos, top, start, end, output_path, note)
+
+        if args.serve:
+            # the viewer shows every author: no hub collapsing, so no pattern is hidden
+            full_view, _ = collapse_hubs(plotted, full_graph, node_to_community, enabled=False)
+            full_pos = get_layout(full_view, start, end, collapsed=False)
+            viewer_intervals.append(export_viewer_data(full_view, full_pos, top, start, end, n_connected))
+
+    if args.serve and viewer_intervals:
+        serve_viewer(viewer_intervals)

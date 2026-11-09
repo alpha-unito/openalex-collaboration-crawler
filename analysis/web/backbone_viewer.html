@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backbone Viewer</title>
+<style>
+  :root {
+    --surface: #fcfcfb;
+    --panel: #f4f3f0;
+    --border: #dcdad3;
+    --text: #1f1f1e;
+    --text-2: #5f5e5a;
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+    --canvas: #ffffff;
+    --select: #1f1f1e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --surface: #1a1a19;
+      --panel: #232321;
+      --border: #3a3a37;
+      --text: #f0efec;
+      --text-2: #c3c2b7;
+      --accent: #3987e5;
+      --accent-ink: #ffffff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --surface: #1a1a19;
+    --panel: #232321;
+    --border: #3a3a37;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --accent: #3987e5;
+    --accent-ink: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    grid-template-rows: 100%;
+    overflow: hidden;
+  }
+  aside {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  h1 { font-size: 18px; margin: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-2); margin: 0 0 8px; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  select, button, input[type="number"] {
+    font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px;
+  }
+  select { flex: 1; min-width: 0; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--text-2); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.toggled { background: var(--text); color: var(--surface); border-color: var(--text); }
+  button:disabled { opacity: .45; cursor: default; }
+  .stats { color: var(--text-2); font-size: 12px; margin-top: 6px; }
+  .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .legend li { display: grid; grid-template-columns: 18px 12px 1fr auto; gap: 8px; align-items: center; padding: 3px 4px; border-radius: 4px; }
+  .legend li:hover { background: var(--surface); }
+  .legend .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .legend .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+  .legend .name small { color: var(--text-2); }
+  .legend .only { font-size: 11px; padding: 1px 6px; visibility: hidden; }
+  .legend li:hover .only { visibility: visible; }
+  label.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  fieldset { border: 0; margin: 0 0 8px; padding: 0; }
+  fieldset legend { font-size: 12px; color: var(--text-2); margin-bottom: 4px; padding: 0; }
+  .hint { color: var(--text-2); font-size: 12px; }
+  main { position: relative; min-width: 0; background: var(--canvas); }
+  canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  canvas#view.panning { cursor: grabbing; }
+  canvas#view.selecting { cursor: crosshair; }
+  #tooltip {
+    position: absolute; pointer-events: none; display: none;
+    background: #1f1f1e; color: #f0efec; font-size: 12px; padding: 6px 8px; border-radius: 6px;
+    max-width: 320px; box-shadow: 0 2px 8px rgba(0,0,0,.25); z-index: 2;
+  }
+  #loading {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #5f5e5a; font-size: 15px; background: rgba(255,255,255,.7); z-index: 3;
+  }
+  .toolbar { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 2; }
+  .toolbar button { background: #ffffff; color: #1f1f1e; border-color: #dcdad3; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .toolbar button.toggled { background: #1f1f1e; color: #ffffff; }
+  @media (max-width: 760px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 45% 55%; }
+    aside { border-right: 0; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <div>
+    <h1>Backbone viewer</h1>
+    <div class="row" style="margin-top:10px">
+      <button id="prev" title="Previous interval (←)">◀</button>
+      <select id="interval" aria-label="Time interval"></select>
+      <button id="next" title="Next interval (→)">▶</button>
+    </div>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <section>
+    <h2>Communities</h2>
+    <ul class="legend" id="legend"></ul>
+    <div class="row" style="margin-top:8px">
+      <button id="show-all">Show all</button>
+      <button id="hide-all">Hide all</button>
+    </div>
+    <label class="check" style="margin-top:10px"><input type="checkbox" id="inter-edges" checked> Edges between communities</label>
+  </section>
+
+  <section>
+    <h2>Export PNG</h2>
+    <fieldset>
+      <legend>Region</legend>
+      <label class="check"><input type="radio" name="region" value="view" checked> Current view</label>
+      <label class="check"><input type="radio" name="region" value="selection" id="region-selection" disabled> Selected area <span class="hint" id="selection-info">(Shift+drag on the graph)</span></label>
+      <label class="check"><input type="radio" name="region" value="all"> Whole graph (visible communities)</label>
+    </fieldset>
+    <fieldset>
+      <legend>Resolution</legend>
+      <div class="row">
+        <label class="check"><input type="radio" name="res" value="1"> 1×</label>
+        <label class="check"><input type="radio" name="res" value="2" checked> 2×</label>
+        <label class="check"><input type="radio" name="res" value="4"> 4×</label>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Include</legend>
+      <label class="check"><input type="checkbox" id="exp-title" checked> Title</label>
+      <label class="check"><input type="checkbox" id="exp-legend" checked> Legend</label>
+      <label class="check"><input type="checkbox" id="exp-transparent"> Transparent background</label>
+    </fieldset>
+    <button class="primary" id="export">Export PNG</button>
+    <div class="hint" id="export-info" style="margin-top:6px"></div>
+  </section>
+
+  <section class="hint">
+    Drag to pan · wheel to zoom · Shift+drag (or “Select area”) to select a region · ← / → change interval.
+    Hub collapsing is off here: every author is drawn.
+  </section>
+</aside>
+
+<main>
+  <canvas id="view"></canvas>
+  <div class="toolbar">
+    <button id="select-tool" title="Drag on the graph to select an area to export">Select area</button>
+    <button id="clear-selection" disabled>Clear selection</button>
+    <button id="fit" title="Fit visible communities">Fit</button>
+  </div>
+  <div id="tooltip"></div>
+  <div id="loading">Loading…</div>
+</main>
+
+<script>
+"use strict";
+
+// ------------------------------------------------------------------ state
+const canvas = document.getElementById("view");
+const ctx = canvas.getContext("2d");
+const tooltip = document.getElementById("tooltip");
+const loading = document.getElementById("loading");
+
+let intervals = [];
+let data = null;          // current interval
+let visible = new Set();  // visible ranks (0..N-1) and -1 for linked communities
+let showInterEdges = true;
+let view = { scale: 1, tx: 0, ty: 0 };
+let selection = null;     // {x0,y0,x1,y1} in world units
+let selectMode = false;
+let drag = null;
+let hovered = -1;
+const cache = new Map();
+
+const NODE_WORLD_R = 0.2;   // layout units (1 unit ~ spacing between authors)
+
+// ------------------------------------------------------------------ loading
+async function init() {
+  intervals = await (await fetch("intervals.json")).json();
+  const select = document.getElementById("interval");
+  for (const iv of intervals) {
+    const opt = document.createElement("option");
+    opt.value = iv.key;
+    opt.textContent = `${iv.label}  (${iv.authors.toLocaleString()} authors)`;
+    select.appendChild(opt);
+  }
+  const fromHash = decodeURIComponent(location.hash.slice(1));
+  const initial = intervals.find(iv => iv.key === fromHash) ? fromHash : intervals[intervals.length - 1].key;
+  select.value = initial;
+  await loadInterval(initial);
+}
+
+async function loadInterval(key) {
+  loading.style.display = "flex";
+  let d = cache.get(key);
+  if (!d) {
+    const meta = intervals.find(iv => iv.key === key);
+    d = prepare(await (await fetch(meta.file)).json());
+    cache.set(key, d);
+  }
+  data = d;
+  history.replaceState(null, "", "#" + key);
+  document.getElementById("interval").value = key;
+  visible = new Set([-1, ...data.communities.map(c => c.rank - 1)]);
+  clearSelection();
+  buildLegend();
+  updateStats();
+  resize();
+  fit();
+  loading.style.display = "none";
+}
+
+function prepare(raw) {
+  const n = raw.nodes.id.length;
+  const x = Float32Array.from(raw.nodes.x);
+  const y = Float32Array.from(raw.nodes.y);
+  const rank = Int16Array.from(raw.nodes.rank);
+  const degree = Int32Array.from(raw.nodes.degree);
+  const radius = new Float32Array(n);
+  for (let i = 0; i < n; i++) radius[i] = NODE_WORLD_R * (0.7 + 0.25 * Math.log1p(degree[i]));
+  // edges grouped by drawing class: -1 = gray, r = inside top community r
+  const groups = new Map();
+  const e = raw.edges;
+  for (let k = 0; k < e.length; k += 2) {
+    const a = e[k], b = e[k + 1];
+    const key = (rank[a] === rank[b] && rank[a] >= 0) ? rank[a] : -1;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(a, b);
+  }
+  for (const [k, arr] of groups) groups.set(k, Uint32Array.from(arr));
+  const byRank = new Map();
+  for (let i = 0; i < n; i++) {
+    if (!byRank.has(rank[i])) byRank.set(rank[i], []);
+    byRank.get(rank[i]).push(i);
+  }
+  return { ...raw, n, x, y, rank, degree, radius, groups, byRank,
+           ids: raw.nodes.id, community: raw.nodes.community };
+}
+
+// ------------------------------------------------------------------ sidebar
+function buildLegend() {
+  const ul = document.getElementById("legend");
+  ul.innerHTML = "";
+  const otherCount = (data.byRank.get(-1) || []).length;
+  const entries = [
+    ...data.communities.map(c => ({ rank: c.rank - 1, color: c.color,
+      html: `${c.rank}. ${escapeHtml(c.name)} <small>(${c.size.toLocaleString()})</small>` })),
+    { rank: -1, color: data.other_color,
+      html: `Linked communities <small>(${otherCount.toLocaleString()} authors)</small>` },
+  ];
+  for (const entry of entries) {
+    const li = document.createElement("li");
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = visible.has(entry.rank);
+    box.addEventListener("change", () => {
+      box.checked ? visible.add(entry.rank) : visible.delete(entry.rank);
+      requestDraw();
+    });
+    const dot = document.createElement("span");
+    dot.className = "dot";
+    dot.style.background = entry.color;
+    const name = document.createElement("span");
+    name.className = "name";
+    name.innerHTML = entry.html;
+    name.title = name.textContent;
+    const only = document.createElement("button");
+    only.className = "only";
+    only.textContent = "only";
+    only.addEventListener("click", () => {
+      visible = new Set([entry.rank]);
+      syncLegend();
+      fit();
+    });
+    li.append(box, dot, name, only);
+    li.dataset.rank = entry.rank;
+    ul.appendChild(li);
+  }
+}
+
+function syncLegend() {
+  for (const li of document.querySelectorAll("#legend li")) {
+    li.querySelector("input").checked = visible.has(Number(li.dataset.rank));
+  }
+  requestDraw();
+}
+
+function updateStats() {
+  const s = data.stats;
+  document.getElementById("stats").textContent =
+    `${s.authors.toLocaleString()} authors · ${s.edges.toLocaleString()} edges · ` +
+    `${s.components.toLocaleString()} component${s.components === 1 ? "" : "s"} · ` +
+    `top ${data.communities.length} + ${s.connected_communities} linked communities`;
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+// ------------------------------------------------------------------ geometry
+function visibleBounds() {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of visible) {
+    for (const i of data.byRank.get(r) || []) {
+      const rr = data.radius[i];
+      if (data.x[i] - rr < x0) x0 = data.x[i] - rr;
+      if (data.y[i] - rr < y0) y0 = data.y[i] - rr;
+      if (data.x[i] + rr > x1) x1 = data.x[i] + rr;
+      if (data.y[i] + rr > y1) y1 = data.y[i] + rr;
+    }
+  }
+  if (!isFinite(x0)) return { x0: -1, y0: -1, x1: 1, y1: 1 };
+  return { x0, y0, x1, y1 };
+}
+
+function fitTransform(b, w, h, pad) {
+  const scale = Math.min((w - 2 * pad) / Math.max(b.x1 - b.x0, 1e-6), (h - 2 * pad) / Math.max(b.y1 - b.y0, 1e-6));
+  return {
+    scale,
+    tx: (w - (b.x1 - b.x0) * scale) / 2 - b.x0 * scale,
+    ty: (h - (b.y1 - b.y0) * scale) / 2 - b.y0 * scale,
+  };
+}
+
+function fit() {
+  view = fitTransform(visibleBounds(), canvas.clientWidth, canvas.clientHeight, 24);
+  requestDraw();
+}
+
+const toWorld = (sx, sy) => ({ x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale });
+
+// ------------------------------------------------------------------ rendering
+/**
+ * Draw the graph on ctx (already in pixel space).
+ * t: {scale, tx, ty} world -> pixel; w,h: pixel size; k: size multiplier for strokes / minimum radii.
+ */
+function render(c, t, w, h, k, background) {
+  c.save();
+  if (background) { c.fillStyle = background; c.fillRect(0, 0, w, h); } else { c.clearRect(0, 0, w, h); }
+  const { x, y, rank, radius, groups } = data;
+  const s = t.scale, tx = t.tx, ty = t.ty;
+  const margin = 4 * k;
+  const inView = (px, py) => px > -margin && px < w + margin && py > -margin && py < h + margin;
+
+  // edges
+  const lineWidth = Math.min(Math.max(0.06 * s, 0.35 * k), 2.2 * k);
+  c.lineCap = "round";
+  const drawEdges = (arr, color, alpha, width, filter) => {
+    c.beginPath();
+    for (let j = 0; j < arr.length; j += 2) {
+      const a = arr[j], b = arr[j + 1];
+      if (filter && !filter(a, b)) continue;
+      const ax = x[a] * s + tx, ay = y[a] * s + ty, bx = x[b] * s + tx, by = y[b] * s + ty;
+      if (!inView(ax, ay) && !inView(bx, by) &&
+          (Math.max(ax, bx) < 0 || Math.min(ax, bx) > w || Math.max(ay, by) < 0 || Math.min(ay, by) > h)) continue;
+      c.moveTo(ax, ay);
+      c.lineTo(bx, by);
+    }
+    c.globalAlpha = alpha;
+    c.strokeStyle = color;
+    c.lineWidth = width;
+    c.stroke();
+  };
+  const gray = groups.get(-1);
+  if (gray) {
+    drawEdges(gray, data.other_edge_color, 0.6, lineWidth, (a, b) =>
+      visible.has(rank[a]) && visible.has(rank[b]) && (showInterEdges || rank[a] === rank[b]));
+  }
+  for (const com of data.communities) {
+    const r = com.rank - 1;
+    const arr = groups.get(r);
+    if (arr && visible.has(r)) drawEdges(arr, com.color, 0.55, lineWidth * 1.2, null);
+  }
+
+  // nodes: gray first, then communities from the smallest to the largest rank so rank 1 stays on top
+  c.globalAlpha = 1;
+  const minR = 0.7 * k;
+  const drawNodes = (indices, color) => {
+    c.fillStyle = color;
+    c.beginPath();
+    for (const i of indices) {
+      const px = x[i] * s + tx, py = y[i] * s + ty;
+      if (!inView(px, py)) continue;
+      const r = Math.max(radius[i] * s, minR);
+      if (r < 1.5 * k) { c.rect(px - r, py - r, 2 * r, 2 * r); }
+      else { c.moveTo(px + r, py); c.arc(px, py, r, 0, 2 * Math.PI); }
+    }
+    c.fill();
+  };
+  if (visible.has(-1)) drawNodes(data.byRank.get(-1) || [], data.other_color);
+  for (let j = data.communities.length - 1; j >= 0; j--) {
+    const com = data.communities[j];
+    if (visible.has(com.rank - 1)) drawNodes(data.byRank.get(com.rank - 1) || [], com.color);
+  }
+  c.restore();
+}
+
+let drawPending = false;
+function requestDraw() {
+  if (drawPending) return;
+  drawPending = true;
+  requestAnimationFrame(() => { drawPending = false; draw(); });
+}
+
+function draw() {
+  if (!data) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.width, h = canvas.height;
+  render(ctx, { scale: view.scale * dpr, tx: view.tx * dpr, ty: view.ty * dpr }, w, h, dpr, "#ffffff");
+  // hovered node ring
+  if (hovered >= 0) {
+    const px = (data.x[hovered] * view.scale + view.tx) * dpr, py = (data.y[hovered] * view.scale + view.ty) * dpr;
+    const r = Math.max(data.radius[hovered] * view.scale, 0.7) * dpr + 3 * dpr;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, 2 * Math.PI);
+    ctx.lineWidth = 2 * dpr; ctx.strokeStyle = "#1f1f1e"; ctx.stroke();
+  }
+  // selection rectangle
+  const rect = drag && drag.mode === "select" ? drag.rect : selection;
+  if (rect) {
+    const ax = (Math.min(rect.x0, rect.x1) * view.scale + view.tx) * dpr;
+    const ay = (Math.min(rect.y0, rect.y1) * view.scale + view.ty) * dpr;
+    const bw = Math.abs(rect.x1 - rect.x0) * view.scale * dpr, bh = Math.abs(rect.y1 - rect.y0) * view.scale * dpr;
+    ctx.save();
+    ctx.fillStyle = "rgba(42,120,214,0.08)";
+    ctx.fillRect(ax, ay, bw, bh);
+    ctx.setLineDash([6 * dpr, 4 * dpr]);
+    ctx.lineWidth = 1.5 * dpr;
+    ctx.strokeStyle = "#1f1f1e";
+    ctx.strokeRect(ax, ay, bw, bh);
+    ctx.restore();
+  }
+  updateExportInfo();
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(canvas.clientWidth * dpr);
+  canvas.height = Math.round(canvas.clientHeight * dpr);
+  requestDraw();
+}
+
+// ------------------------------------------------------------------ interaction
+canvas.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const factor = Math.exp(-ev.deltaY * (ev.deltaMode === 1 ? 0.05 : 0.0015));
+  const rect = canvas.getBoundingClientRect();
+  const sx = ev.clientX - rect.left, sy = ev.clientY - rect.top;
+  view.tx = sx - (sx - view.tx) * factor;
+  view.ty = sy - (sy - view.ty) * factor;
+  view.scale *= factor;
+  requestDraw();
+}, { passive: false });
+
+canvas.addEventListener("pointerdown", ev => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = ev.clientX - rect.left, sy = ev.clientY - rect.top;
+  canvas.setPointerCapture(ev.pointerId);
+  if (selectMode || ev.shiftKey) {
+    const p = toWorld(sx, sy);
+    drag = { mode: "select", rect: { x0: p.x, y0: p.y, x1: p.x, y1: p.y } };
+    canvas.classList.add("selecting");
+  } else {
+    drag = { mode: "pan", sx, sy, tx: view.tx, ty: view.ty };
+    canvas.classList.add("panning");
+  }
+  hideTooltip();
+});
+
+canvas.addEventListener("pointermove", ev => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = ev.clientX - rect.left, sy = ev.clientY - rect.top;
+  if (drag && drag.mode === "pan") {
+    view.tx = drag.tx + (sx - drag.sx);
+    view.ty = drag.ty + (sy - drag.sy);
+    requestDraw();
+  } else if (drag && drag.mode === "select") {
+    const p = toWorld(sx, sy);
+    drag.rect.x1 = p.x; drag.rect.y1 = p.y;
+    requestDraw();
+  } else {
+    hover(sx, sy, ev.clientX - rect.left, ev.clientY - rect.top);
+  }
+});
+
+const endDrag = () => {
+  if (drag && drag.mode === "select") {
+    const r = drag.rect;
+    const pxW = Math.abs(r.x1 - r.x0) * view.scale, pxH = Math.abs(r.y1 - r.y0) * view.scale;
+    if (pxW > 4 && pxH > 4) {
+      setSelection({ x0: Math.min(r.x0, r.x1), y0: Math.min(r.y0, r.y1), x1: Math.max(r.x0, r.x1), y1: Math.max(r.y0, r.y1) });
+    }
+    setSelectMode(false);
+  }
+  drag = null;
+  canvas.classList.remove("panning", "selecting");
+  requestDraw();
+};
+canvas.addEventListener("pointerup", endDrag);
+canvas.addEventListener("pointercancel", endDrag);
+canvas.addEventListener("pointerleave", () => { if (!drag) { hovered = -1; hideTooltip(); requestDraw(); } });
+
+function hover(sx, sy) {
+  if (!data) return;
+  const p = toWorld(sx, sy);
+  const tol = 6 / view.scale;
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < data.n; i++) {
+    if (!visible.has(data.rank[i])) continue;
+    const dx = data.x[i] - p.x, dy = data.y[i] - p.y;
+    const lim = Math.max(data.radius[i], tol);
+    if (Math.abs(dx) > lim || Math.abs(dy) > lim) continue;
+    const d = dx * dx + dy * dy;
+    if (d < bestD && d <= lim * lim) { bestD = d; best = i; }
+  }
+  if (best !== hovered) { hovered = best; requestDraw(); }
+  if (best < 0) { hideTooltip(); return; }
+  const r = data.rank[best];
+  const com = r >= 0 ? data.communities[r] : null;
+  tooltip.innerHTML =
+    `<b>${escapeHtml(data.ids[best])}</b><br>` +
+    (com ? `${com.rank}. ${escapeHtml(com.name)}` : `Linked community #${data.community[best]}`) +
+    `<br>Backbone degree: ${data.degree[best].toLocaleString()}`;
+  tooltip.style.display = "block";
+  const main = canvas.parentElement.getBoundingClientRect();
+  let left = sx + 14, top = sy + 14;
+  if (left + tooltip.offsetWidth > main.width - 8) left = sx - tooltip.offsetWidth - 14;
+  if (top + tooltip.offsetHeight > main.height - 8) top = sy - tooltip.offsetHeight - 14;
+  tooltip.style.left = left + "px";
+  tooltip.style.top = top + "px";
+}
+function hideTooltip() { tooltip.style.display = "none"; }
+
+function setSelectMode(on) {
+  selectMode = on;
+  document.getElementById("select-tool").classList.toggle("toggled", on);
+  canvas.classList.toggle("selecting", on);
+}
+function setSelection(rect) {
+  selection = rect;
+  document.getElementById("region-selection").disabled = false;
+  document.getElementById("region-selection").checked = true;
+  document.getElementById("clear-selection").disabled = false;
+  document.getElementById("selection-info").textContent = "";
+  updateExportInfo();
+}
+function clearSelection() {
+  selection = null;
+  const radio = document.getElementById("region-selection");
+  if (radio.checked) document.querySelector('input[name="region"][value="view"]').checked = true;
+  radio.disabled = true;
+  document.getElementById("clear-selection").disabled = true;
+  document.getElementById("selection-info").textContent = "(Shift+drag on the graph)";
+  updateExportInfo();
+  requestDraw();
+}
+
+// ------------------------------------------------------------------ export
+const MAX_EXPORT_SIDE = 16384;
+
+function exportPlan() {
+  const region = document.querySelector('input[name="region"]:checked').value;
+  const res = Number(document.querySelector('input[name="res"]:checked').value);
+  let bounds, cssW, cssH;
+  if (region === "selection" && selection) {
+    bounds = selection;
+    cssW = (bounds.x1 - bounds.x0) * view.scale;
+    cssH = (bounds.y1 - bounds.y0) * view.scale;
+  } else if (region === "all") {
+    bounds = visibleBounds();
+    const aspect = (bounds.y1 - bounds.y0) / Math.max(bounds.x1 - bounds.x0, 1e-6);
+    cssW = 1600;
+    cssH = 1600 * aspect;
+  } else {
+    bounds = toWorld(0, 0);
+    const br = toWorld(canvas.clientWidth, canvas.clientHeight);
+    bounds = { x0: bounds.x, y0: bounds.y, x1: br.x, y1: br.y };
+    cssW = canvas.clientWidth;
+    cssH = canvas.clientHeight;
+  }
+  let k = res;
+  const largest = Math.max(cssW, cssH) * k;
+  if (largest > MAX_EXPORT_SIDE) k *= MAX_EXPORT_SIDE / largest;
+  return { region, bounds, w: Math.max(1, Math.round(cssW * k)), h: Math.max(1, Math.round(cssH * k)), k };
+}
+
+function updateExportInfo() {
+  if (!data) return;
+  const plan = exportPlan();
+  document.getElementById("export-info").textContent = `Graph area: ${plan.w.toLocaleString()} × ${plan.h.toLocaleString()} px`;
+}
+
+function legendEntries() {
+  const entries = data.communities
+    .filter(c => visible.has(c.rank - 1))
+    .map(c => ({ color: c.color, text: `${c.rank}. ${c.name} (${c.size.toLocaleString()} authors)` }));
+  if (visible.has(-1)) {
+    entries.push({ color: data.other_color,
+                   text: `Linked communities (${(data.byRank.get(-1) || []).length.toLocaleString()} authors)` });
+  }
+  return entries;
+}
+
+function exportPng() {
+  const plan = exportPlan();
+  const withTitle = document.getElementById("exp-title").checked;
+  const withLegend = document.getElementById("exp-legend").checked;
+  const transparent = document.getElementById("exp-transparent").checked;
+  const k = plan.k;
+  const font = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+
+  // header / legend bands
+  const pad = 16 * k;
+  const titleH = withTitle ? 54 * k : 0;
+  const entries = withLegend ? legendEntries() : [];
+  const cols = plan.w > 900 * k ? 2 : 1;
+  const lineH = 20 * k;
+  const legendH = entries.length ? Math.ceil(entries.length / cols) * lineH + 2 * pad : 0;
+
+  const out = document.createElement("canvas");
+  out.width = plan.w;
+  out.height = Math.round(plan.h + titleH + legendH);
+  const c = out.getContext("2d");
+  const background = transparent ? null : "#ffffff";
+  if (background) { c.fillStyle = background; c.fillRect(0, 0, out.width, out.height); }
+
+  // graph: rendered on its own canvas (world bounds -> plan.w x plan.h px), then placed below the title
+  const scale = plan.w / (plan.bounds.x1 - plan.bounds.x0);
+  const graphCanvas = document.createElement("canvas");
+  graphCanvas.width = plan.w;
+  graphCanvas.height = plan.h;
+  render(graphCanvas.getContext("2d"), { scale, tx: -plan.bounds.x0 * scale, ty: -plan.bounds.y0 * scale },
+         plan.w, plan.h, k, background);
+  c.drawImage(graphCanvas, 0, titleH);
+
+  // title
+  c.fillStyle = "#1f1f1e";
+  c.textBaseline = "top";
+  if (withTitle) {
+    c.font = `600 ${20 * k}px ${font}`;
+    c.fillText(`Backbone ${data.label}`, pad, 10 * k);
+    c.font = `${12 * k}px ${font}`;
+    c.fillStyle = "#5f5e5a";
+    const s = data.stats;
+    c.fillText(`${s.authors.toLocaleString()} authors · ${s.edges.toLocaleString()} edges · top ${data.communities.length} communities + ${s.connected_communities} linked · no hub collapsing`, pad, 35 * k);
+  }
+
+  // legend
+  if (entries.length) {
+    const colW = (plan.w - 2 * pad) / cols;
+    const rows = Math.ceil(entries.length / cols);
+    c.font = `${12 * k}px ${font}`;
+    entries.forEach((entry, i) => {
+      const col = Math.floor(i / rows), row = i % rows;
+      const ex = pad + col * colW, ey = titleH + plan.h + pad + row * lineH;
+      c.fillStyle = entry.color;
+      c.beginPath(); c.arc(ex + 6 * k, ey + 7 * k, 5 * k, 0, 2 * Math.PI); c.fill();
+      c.fillStyle = "#1f1f1e";
+      let text = entry.text;
+      const maxW = colW - 24 * k;
+      while (c.measureText(text).width > maxW && text.length > 4) text = text.slice(0, -2);
+      if (text !== entry.text) text = text.slice(0, -1) + "…";
+      c.fillText(text, ex + 18 * k, ey);
+    });
+  }
+
+  out.toBlob(blob => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `backbone_${data.key}_${plan.region}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, "image/png");
+}
+
+// ------------------------------------------------------------------ wiring
+document.getElementById("interval").addEventListener("change", e => loadInterval(e.target.value));
+const step = dir => {
+  const i = intervals.findIndex(iv => iv.key === data.key);
+  const j = Math.min(Math.max(i + dir, 0), intervals.length - 1);
+  if (j !== i) loadInterval(intervals[j].key);
+};
+document.getElementById("prev").addEventListener("click", () => step(-1));
+document.getElementById("next").addEventListener("click", () => step(1));
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.key === "ArrowLeft") step(-1);
+  if (e.key === "ArrowRight") step(1);
+  if (e.key === "Escape") { setSelectMode(false); clearSelection(); }
+});
+document.getElementById("show-all").addEventListener("click", () => {
+  visible = new Set([-1, ...data.communities.map(c => c.rank - 1)]); syncLegend();
+});
+document.getElementById("hide-all").addEventListener("click", () => { visible = new Set(); syncLegend(); });
+document.getElementById("inter-edges").addEventListener("change", e => { showInterEdges = e.target.checked; requestDraw(); });
+document.getElementById("fit").addEventListener("click", fit);
+document.getElementById("select-tool").addEventListener("click", () => setSelectMode(!selectMode));
+document.getElementById("clear-selection").addEventListener("click", clearSelection);
+document.getElementById("export").addEventListener("click", exportPng);
+for (const input of document.querySelectorAll('input[name="region"], input[name="res"]')) {
+  input.addEventListener("change", updateExportInfo);
+}
+window.addEventListener("resize", resize);
+new ResizeObserver(resize).observe(canvas);
+
+init().catch(err => { loading.textContent = "Could not load the viewer data: " + err; });
+</script>
+</body>
+</html>
