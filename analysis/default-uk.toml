@@ -177,3 +177,25 @@ random_seed = 42
 
 # Output file (stored under statistics_out_basedir). Graphs already in it are skipped.
 outputs.stats_file = "path_clustering_stats.csv"
+
+#=====================================#
+#      BACKBONE VISUALIZATION STEP    #
+#=====================================#
+[backbone_visualization]
+# Number of largest communities (from the stability partition) to plot and color. Other
+# communities are plotted (in gray) only if at least one edge connects them to these.
+top_communities = 10
+# Hub collapsing: if the hub of a community is connected to MORE than this fraction of the
+# other members, the hub and those neighbours are drawn as a single node (area ~ #authors,
+# degree = sum of the members' degrees, one edge per distinct neighbour)
+collapse_threshold = 0.9
+# Communities smaller than this are never collapsed
+collapse_min_community_size = 3
+# Seed for the force-directed layouts
+seed = 42
+# Layouts are cached under workflow_data/country/<layout_directory>; set true to recompute them
+recompute_layout = false
+# Directory (under workflow_data/country/) for the cached node positions
+outputs.layout_directory = "backbone_layouts"
+# Plots are saved as <statistics_out_basedir>/<plot_prefix>_<start>_<end>.pdf
+outputs.plot_prefix = "backbone_visualization"
