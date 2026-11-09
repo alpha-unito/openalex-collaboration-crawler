@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import NullFormatter
 import tomllib
 import re, sys
 from pathlib import Path
@@ -27,6 +28,7 @@ try:
     output_plot = base_dir / cfg["plot_generation"]["outputs"]["structural_step_plot_filename"]
     bacbone_output_plot = base_dir / cfg["plot_generation"]["outputs"]["backbone_structural_step_plot_filename"]
     combined_output_plot = base_dir / cfg["plot_generation"]["outputs"]["combined_structural_step_plot_filename"]
+    path_clustering_stats_file = base_dir / cfg["path_clustering_statistics"]["outputs"]["stats_file"]
     
     validation_stats_filename_random = cfg["statistics_out_basedir"] + "/" + cfg["graph_property_validation"]["outputs"]["stats_out_random"]
     validation_stats_filename = cfg["statistics_out_basedir"] + "/" + cfg["graph_property_validation"]["outputs"]["stats_out"]
@@ -233,6 +235,27 @@ for df, style in combined_series:
     if not df["label"].equals(labels):
         raise RuntimeError(f"Time interval mismatch for series '{style['label']}'")
 
+# Average clustering coefficient and degree assortativity come from 13_path_clustering_assortativity.py
+# (one row per graph, whole-graph values plus "lcc_"-prefixed largest-CC values)
+CLUSTERING_COLUMNS = ["avg_clustering", "degree_assortativity"]
+if path_clustering_stats_file.exists():
+    path_stats = prepare_df(path_clustering_stats_file)
+    for (df, style), (network, prefix) in zip(
+        combined_series, [("full", ""), ("full", "lcc_"), ("backbone", ""), ("backbone", "lcc_")]
+    ):
+        rows = path_stats[path_stats["network"] == network].set_index("label")
+        for col in CLUSTERING_COLUMNS:
+            df[col] = df["label"].map(rows[prefix + col])
+        missing = df.loc[df[CLUSTERING_COLUMNS[0]].isna(), "label"].str.replace("\n", "", regex=False).tolist()
+        if missing:
+            print(f"Warning: no clustering/assortativity for '{style['label']}' in {missing}")
+else:
+    print(f"Warning: {path_clustering_stats_file} not found (run 13_path_clustering_assortativity.py); "
+          f"clustering and assortativity panels will be empty")
+    for df, _ in combined_series:
+        for col in CLUSTERING_COLUMNS:
+            df[col] = float("nan")
+
 
 def combined_line(ax, col, title, ylabel=None, logy=False):
     for df, style in combined_series:
@@ -242,35 +265,32 @@ def combined_line(ax, col, title, ylabel=None, logy=False):
         ax.set_ylabel(ylabel)
     if logy:
         ax.set_yscale("log")
+        ax.yaxis.set_minor_formatter(NullFormatter())  # decade labels only
     ax.tick_params(axis="x", rotation=90)
     ax.grid(True)
 
 
-fig, axes = plt.subplots(3, 3, figsize=(18, 15))
+fig, axes = plt.subplots(4, 3, figsize=(18, 20))
 axes = axes.flatten()
 
-# ---- 1: Nodes vs Edges, each series followed in time order ----
-for df, style in combined_series:
-    axes[0].plot(df["number_of_nodes"], df["number_of_edges"], markersize=7, **style)
-axes[0].set_xscale("log")
-axes[0].set_yscale("log")
-axes[0].set_title("Nodes vs Edges")
-axes[0].set_xlabel("Nodes")
-axes[0].set_ylabel("Edges")
-axes[0].grid(True)
+# Rows: size, degree, weighted degree, clustering (log scale where full network and backbone
+# differ by orders of magnitude)
+combined_line(axes[0], "number_of_nodes", "Number of Nodes", "Nodes", logy=True)
+combined_line(axes[1], "number_of_edges", "Number of Edges", "Edges", logy=True)
+combined_line(axes[2], "density", "Density", logy=True)
+combined_line(axes[3], "mean_degree", "Mean Degree", "Degree", logy=True)
+combined_line(axes[4], "median_degree", "Median Degree", logy=True)
+combined_line(axes[5], "max_degree", "Max Degree", logy=True)
+combined_line(axes[6], "w_mean_degree", "W Mean Degree", "Weighted degree", logy=True)
+combined_line(axes[7], "w_median_degree", "W Median Degree", logy=True)
+combined_line(axes[8], "w_max_degree", "W Max Degree", logy=True)
+combined_line(axes[9], "transitivity", "Transitivity")
+combined_line(axes[10], "avg_clustering", "Avg Clustering Coefficient")
+combined_line(axes[11], "degree_assortativity", "Degree Assortativity")
+axes[11].axhline(0, color="#5f5e5a", linewidth=1, zorder=0)  # neutral (no degree correlation)
 
-# ---- 2–9: Line plots (log scale where full network and backbone differ by orders of magnitude) ----
-combined_line(axes[1], "mean_degree", "Mean Degree", "Degree", logy=True)
-combined_line(axes[2], "median_degree", "Median Degree", logy=True)
-combined_line(axes[3], "w_mean_degree", "W Mean Degree", "Weighted degree", logy=True)
-combined_line(axes[4], "density", "Density", logy=True)
-combined_line(axes[5], "transitivity", "Transitivity")
-combined_line(axes[6], "max_degree", "Max Degree", "Degree", logy=True)
-combined_line(axes[7], "w_max_degree", "W Max Degree", "Weighted degree", logy=True)
-combined_line(axes[8], "number_of_nodes", "Number of Nodes", "Nodes", logy=True)
-
-fig.legend(*axes[1].get_legend_handles_labels(), loc="upper center", bbox_to_anchor=(0.5, 0.96), ncol=4, fontsize=16)
-fig.tight_layout(rect=[0, 0, 1, 0.91])
+fig.legend(*axes[0].get_legend_handles_labels(), loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=4, fontsize=16)
+fig.tight_layout(rect=[0, 0, 1, 0.965])
 
 fig.savefig(combined_output_plot)
 plt.close()
