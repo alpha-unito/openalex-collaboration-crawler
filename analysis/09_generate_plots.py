@@ -302,37 +302,44 @@ print(f"Saved plot to {combined_output_plot}")
 ########################################
 
 style_validation = dict(marker="o", linestyle="-", label="Real network")
-style_validation_random = dict(marker="x", markersize=9, markeredgewidth=1, linestyle="--", label="Random generated network")
+style_validation_random = dict(marker="o", linestyle="--", label="Random generated network")
 
 df_validation = prepare_df(validation_stats_filename)
 df_validation_random = prepare_df(validation_stats_filename_random)
 labels = df_validation["label"]
 
 
-fig, axes = plt.subplots(3, 3, figsize=(18, 15))
-axes = axes.flatten()
+validation_metrics = [
+    ("degree_assortativity", "Degree Assortativity"),
+    ("clustering_coefficent", "Clustering Coefficient"),
+    ("transitivity", "Transitivity"),
+]
 
-# ---- 1: Nodes vs Edges ----
-nodes_vs_edges(
-    axes[0], df_validation, df_validation_random,
-    style_validation, style_validation_random
-)
+fig, axes = plt.subplots(1, 3, figsize=(18, 6.5))
 
-# ---- 2–9: Metrics ----
-line(axes[1], df_validation, df_validation_random, style_validation, style_validation_random, "mean_degree", "Mean Degree", "Degree", variance_col="mean_degree_var")
-line(axes[2], df_validation, df_validation_random, style_validation, style_validation_random, "median_degree", "Median Degree",variance_col="median_degree_var")
-line(axes[3], df_validation, df_validation_random, style_validation, style_validation_random, "density", "Density", logy=True, variance_col="density_var")
-line(axes[4], df_validation, df_validation_random, style_validation, style_validation_random, "clustering_coefficent", "Clustering Coefficient", variance_col="clustering_coefficent_var")
-line(axes[5], df_validation, df_validation_random, style_validation, style_validation_random, "transitivity", "Transitivity", variance_col="transitivity_var")
-line(axes[6], df_validation, df_validation_random, style_validation, style_validation_random, "max_degree", "Max Degree", "Degree", variance_col="max_degree_var")
-line(axes[7], df_validation, df_validation_random, style_validation, style_validation_random, "degree_assortativity", "Degree Assortativity", variance_col="degree_assortativity_var")
-line(axes[8], df_validation, df_validation_random, style_validation, style_validation_random, "n_connected_components", "Connected Components", logy=True, variance_col="n_connected_components_var")
+for ax, (col, title) in zip(axes, validation_metrics):
+    std = df_validation_random[f"{col}_var"].pow(0.5)
+
+    ax.plot(labels, df_validation[col], **style_validation)
+    ax.errorbar(labels, df_validation_random[col], yerr=std, capsize=4, elinewidth=1.5, **style_validation_random)
+    ax.set_title(title)
+    ax.tick_params(axis="x", rotation=90)
+    ax.grid(True)
+    if col == "degree_assortativity":
+        ax.axhline(0, color="#5f5e5a", linewidth=1, zorder=0)
+
+axes[0].set_ylabel("Value")
 
 # =============================
 # Final layout
 # =============================
-fig.legend(*axes[1].get_legend_handles_labels(), loc="upper center", bbox_to_anchor=(0.5, 0.96), ncol=2, fontsize=16)
-fig.tight_layout(rect=[0, 0, 1, 0.91])
+handles, _ = axes[0].get_legend_handles_labels()
+fig.legend(
+    handles,
+    ["Real network", r"Random generated network (mean $\pm\sigma$)"],
+    loc="upper center", bbox_to_anchor=(0.5, 0.995), ncol=2, fontsize=14,
+)
+fig.tight_layout(rect=[0, 0, 1, 0.92])
 
 fig.savefig(validation_out_filename)
 plt.close()
